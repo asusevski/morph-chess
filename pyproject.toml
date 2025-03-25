@@ -1,0 +1,11 @@
+[project]
+name = "test"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "chess>=1.11.2",
+    "morphcloud>=0.1.32",
+    "pyproject-toml>=0.1.0",
+]
