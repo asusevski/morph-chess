@@ -262,6 +262,7 @@ def game_loop():
     """
     parser = argparse.ArgumentParser(description="Chess game with save/load functionality")
     parser.add_argument("--load", help="Load a saved game file")
+    parser.add_argument("--autosave", action="store_true", help="Automatically save the game after every move")
     args = parser.parse_args()
     
     # Either load a game or start a new one
@@ -276,6 +277,11 @@ def game_loop():
         board, game_id = initialize_board()
         print(f"New game started with ID: {game_id}")
     
+    # Create save directory if using autosave
+    autosave_dir = "chess_autosaves"
+    if args.autosave and not os.path.exists(autosave_dir):
+        os.makedirs(autosave_dir)
+        
     print("\nWelcome to Chess!")
     print("You play as White, computer plays as Black")
     print("Commands:")
@@ -284,6 +290,10 @@ def game_loop():
     print("  - Type 'save' to save the current game")
     print("  - Type 'quit' to exit")
     print("  - Type 'help' for this message")
+    
+    if args.autosave:
+        print("\nAuto-save is enabled. Game will be saved after every move.")
+        print(f"Auto-save files will be stored in the '{autosave_dir}' directory.")
     
     # Main game loop
     while True:
@@ -323,6 +333,12 @@ def game_loop():
             # Try to make the user's move
             try:
                 board = make_move(board, user_input)
+                
+                # Auto-save after player's move if enabled
+                if args.autosave:
+                    autosave_path = os.path.join(autosave_dir, f"chess_game_{game_id}_move_{len(board.move_stack)}.json")
+                    save_game(board, game_id, autosave_path)
+                    print(f"Game auto-saved to: {autosave_path}")
             except (ValueError, IllegalMoveError) as e:
                 print(f"Error: {e}")
                 print("Please try again.")
@@ -335,6 +351,12 @@ def game_loop():
                 # Make a random move for the computer
                 random_move = make_random_move(board)
                 print(f"Computer's move: {random_move.uci()}")
+                
+                # Auto-save after computer's move if enabled
+                if args.autosave:
+                    autosave_path = os.path.join(autosave_dir, f"chess_game_{game_id}_move_{len(board.move_stack)}.json")
+                    save_game(board, game_id, autosave_path)
+                    print(f"Game auto-saved to: {autosave_path}")
             except ValueError as e:
                 print(f"Error: {e}")
                 break
