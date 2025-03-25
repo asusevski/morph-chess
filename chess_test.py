@@ -220,6 +220,41 @@ def display_board(board):
     if board.is_check():
         print(f"{turn} is in CHECK!")
 
+def display_valid_moves(board):
+    """
+    Display all valid moves for the current player in a readable format.
+    
+    Args:
+        board (chess.Board): The current chess board
+    """
+    legal_moves = list(board.legal_moves)
+    
+    if not legal_moves:
+        print("No legal moves available!")
+        return
+    
+    # Group moves by starting square
+    moves_by_square = {}
+    for move in legal_moves:
+        from_square = chess.square_name(move.from_square)
+        if from_square not in moves_by_square:
+            moves_by_square[from_square] = []
+        moves_by_square[from_square].append(chess.square_name(move.to_square))
+    
+    # Display moves in organized format
+    print("\nValid moves:")
+    for from_square, to_squares in sorted(moves_by_square.items()):
+        # Get the piece at this square
+        piece = board.piece_at(chess.parse_square(from_square))
+        piece_symbol = piece.symbol()
+        
+        # Format the destinations
+        destinations = ", ".join(sorted(to_squares))
+        
+        print(f"  {piece_symbol} at {from_square} → {destinations}")
+    
+    print(f"Total legal moves: {len(legal_moves)}")
+
 def game_loop():
     """
     Main game loop for playing chess against a computer making random moves.
@@ -245,6 +280,7 @@ def game_loop():
     print("You play as White, computer plays as Black")
     print("Commands:")
     print("  - Enter moves in UCI format (e.g., 'e2e4')")
+    print("  - Type 'moves' to show all valid moves")
     print("  - Type 'save' to save the current game")
     print("  - Type 'quit' to exit")
     print("  - Type 'help' for this message")
@@ -275,9 +311,13 @@ def game_loop():
             elif user_input == 'help':
                 print("\nCommands:")
                 print("  - Enter moves in UCI format (e.g., 'e2e4')")
+                print("  - Type 'moves' to show all valid moves")
                 print("  - Type 'save' to save the current game")
                 print("  - Type 'quit' to exit")
                 print("  - Type 'help' for this message")
+                continue
+            elif user_input == 'moves':
+                display_valid_moves(board)
                 continue
             
             # Try to make the user's move
