@@ -200,6 +200,9 @@ def display_board(board):
     Args:
         board (chess.Board): The chess board to display
     """
+    # Get the evaluation
+    eval_score = evaluate_board(board)
+    
     # Convert the standard board string to a list of lines
     board_str = str(board).split('\n')
     
@@ -215,6 +218,16 @@ def display_board(board):
     # Display whose turn it is
     turn = "White" if board.turn == chess.WHITE else "Black"
     print(f"\nCurrent turn: {turn}")
+    
+    # Show evaluation
+    if eval_score > 0:
+        eval_display = f"+{eval_score}" if eval_score < 100 else "+∞"
+        print(f"Evaluation: {eval_display} (White advantage)")
+    elif eval_score < 0:
+        eval_display = f"{eval_score}" if eval_score > -100 else "-∞"
+        print(f"Evaluation: {eval_display} (Black advantage)")
+    else:
+        print("Evaluation: 0.00 (Equal position)")
     
     # Show check status
     if board.is_check():
@@ -254,6 +267,79 @@ def display_valid_moves(board):
         print(f"  {piece_symbol} at {from_square} → {destinations}")
     
     print(f"Total legal moves: {len(legal_moves)}")
+
+def evaluate_board(board):
+    """
+    Calculate a simple evaluation of the current board position.
+    Positive values favor white, negative values favor black.
+    
+    Args:
+        board (chess.Board): The chess board to evaluate
+        
+    Returns:
+        float: Evaluation score (positive favors white, negative favors black)
+    """
+    # Piece values (standard chess values)
+    piece_values = {
+        chess.PAWN: 1.0,
+        chess.KNIGHT: 3.0,
+        chess.BISHOP: 3.0,
+        chess.ROOK: 5.0,
+        chess.QUEEN: 9.0,
+        chess.KING: 0.0  # King's value isn't counted in material
+    }
+    
+    # Position evaluation weights
+    position_weights = {
+        # Center control
+        chess.E4: 0.3, chess.D4: 0.3, chess.E5: 0.3, chess.D5: 0.3,
+        # Extended center
+        chess.C3: 0.1, chess.D3: 0.1, chess.E3: 0.1, chess.F3: 0.1,
+        chess.C6: 0.1, chess.D6: 0.1, chess.E6: 0.1, chess.F6: 0.1,
+        chess.C4: 0.1, chess.C5: 0.1, chess.F4: 0.1, chess.F5: 0.1
+    }
+    
+    evaluation = 0.0
+    
+    # Count material
+    for square in chess.SQUARES:
+        piece = board.piece_at(square)
+        if piece:
+            # Get material value
+            value = piece_values[piece.piece_type]
+            
+            # Add square-specific position value if applicable
+            if square in position_weights:
+                value += position_weights[square]
+                
+            # Apply sign based on color
+            value = value if piece.color == chess.WHITE else -value
+            evaluation += value
+    
+    # Check status advantages
+    if board.is_checkmate():
+        # Big score for checkmate
+        evaluation = float('-inf') if board.turn == chess.WHITE else float('inf')
+    elif board.is_check():
+        # Small bonus for giving check
+        evaluation += 0.5 if board.turn == chess.BLACK else -0.5
+    
+    # Mobility (number of legal moves)
+    mobility = len(list(board.legal_moves))
+    # Save current turn
+    current_turn = board.turn
+    
+    # Temporarily switch sides to count opponent's moves
+    board.turn = not board.turn
+    opponent_mobility = len(list(board.legal_moves))
+    # Restore original turn
+    board.turn = current_turn
+    
+    # Add small advantage for mobility difference
+    mobility_score = (mobility - opponent_mobility) * 0.05
+    evaluation += mobility_score if current_turn == chess.WHITE else -mobility_score
+    
+    return round(evaluation, 2)
 
 def game_loop():
     """
