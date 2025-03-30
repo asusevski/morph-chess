@@ -495,12 +495,21 @@ class ChessLLMAgent:
         if self.chess_board:
             fen_representation = self.chess_board.fen()
         
-        # Create a prompt for the LLM
+        move_history = []
+        if self.chess_board and self.chess_board.move_stack:
+            move_history = [move.uci() for move in self.chess_board.move_stack]
+            # truncate move history if too long
+            if len(move_history) > 25:
+                move_history = move_history[-25:]
+
         prompt = f"""
 You are playing chess as White. Your goal is to choose the best move.
 
 Current board state:
 {self.board_state}
+
+Move history:
+{', '.join(move_history) if move_history else "No previous moves."}
 
 FEN notation:
 {fen_representation}
