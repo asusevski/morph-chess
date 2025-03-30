@@ -12,7 +12,7 @@ import random
 
 
 client = InferenceClient(
-    provider="fireworks-ai",
+    provider="novita",
     api_key=os.environ["HF_API_KEY"],
 )
 
@@ -67,7 +67,6 @@ class ChessLLMAgent:
         
         # Variables to track readiness indicators
         game_id_found = False
-        board_found = False
         
         # Read output with timeout
         while time.time() - start_time < timeout:
@@ -87,20 +86,22 @@ class ChessLLMAgent:
                 if "New game started with ID:" in line:
                     self.game_id = line.split("ID:")[1].strip()
                     game_id_found = True
+                    # After finding the game ID, wait a bit and then send a newline to get the board
+                    time.sleep(1)
+                    self._send_command("")
                 
                 # Check for board output (looking for chess board pattern)
                 if any(rank_indicator in line for rank_indicator in [' 8 ', ' 7 ', ' 6 ', ' 5 ', ' 4 ', ' 3 ', ' 2 ', ' 1 ']):
-                    board_found = True
+                    print("Found board pattern!")
                 
                 # If we've reached the prompt, we can stop reading
                 if "Your move" in line or "Enter moves in UCI format" in line:
                     print("Found prompt for move input!")
                     break
             
-            # If we've found both a game ID and a board representation, we can consider the game ready
-            # This is a fallback in case the exact prompt text doesn't match
-            if game_id_found and board_found and time.time() - start_time > 5:  # Wait at least 5 seconds to collect output
-                print("Found game ID and board - assuming game is ready for input.")
+            # If we've found the game ID and waited enough time, force continuing
+            if game_id_found and time.time() - start_time > 5:  # Wait at least 5 seconds to collect output
+                print("Found game ID - assuming game is ready for initial output.")
                 break
             
             # Check if process is still running
@@ -109,7 +110,7 @@ class ChessLLMAgent:
                 raise RuntimeError(f"Chess process exited unexpectedly: Exit code {self.process.returncode}, Error: {error}")
         
         # Check if we timed out
-        if not (game_id_found and board_found) and time.time() - start_time >= timeout:
+        if not game_id_found and time.time() - start_time >= timeout:
             self.process.terminate()
             raise TimeoutError(f"Timed out waiting for chess process initial output. Last output: {output}")
         
@@ -149,7 +150,6 @@ class ChessLLMAgent:
         
         # Variables to track readiness indicators
         game_id_found = False
-        board_found = False
         
         # Read output with timeout
         while time.time() - start_time < timeout:
@@ -169,20 +169,22 @@ class ChessLLMAgent:
                 if "Loaded game with ID:" in line:
                     self.game_id = line.split("ID:")[1].strip()
                     game_id_found = True
+                    # After finding the game ID, wait a bit and then send a newline to get the board
+                    time.sleep(1)
+                    self._send_command("")
                 
                 # Check for board output (looking for chess board pattern)
                 if any(rank_indicator in line for rank_indicator in [' 8 ', ' 7 ', ' 6 ', ' 5 ', ' 4 ', ' 3 ', ' 2 ', ' 1 ']):
-                    board_found = True
+                    print("Found board pattern!")
                 
                 # If we've reached the prompt, we can stop reading
                 if "Your move" in line or "Enter moves in UCI format" in line:
                     print("Found prompt for move input!")
                     break
             
-            # If we've found both a game ID and a board representation, we can consider the game ready
-            # This is a fallback in case the exact prompt text doesn't match
-            if game_id_found and board_found and time.time() - start_time > 5:  # Wait at least 5 seconds to collect output
-                print("Found game ID and board - assuming game is ready for input.")
+            # If we've found the game ID and waited enough time, force continuing
+            if game_id_found and time.time() - start_time > 5:  # Wait at least 5 seconds to collect output
+                print("Found game ID - assuming game is ready for initial output.")
                 break
             
             # Check if process is still running
@@ -191,7 +193,7 @@ class ChessLLMAgent:
                 raise RuntimeError(f"Chess process exited unexpectedly: Exit code {self.process.returncode}, Error: {error}")
         
         # Check if we timed out
-        if not (game_id_found and board_found) and time.time() - start_time >= timeout:
+        if not game_id_found and time.time() - start_time >= timeout:
             self.process.terminate()
             raise TimeoutError(f"Timed out waiting for chess process initial output. Last output: {output}")
         
@@ -464,8 +466,23 @@ First explain your reasoning, then provide ONLY the UCI notation for your chosen
         """
         move_count = 0
         
+        # First parse the output to get the current state
+        # Important: We need to know whose turn it is (White or Black)
+        if not self.turn:
+            # Ensure we've parsed the state at least once
+            output = self._read_until_prompt()
+            self._parse_output(output)
+        
         while not self.game_over and move_count < moves_limit:
-            # Generate and make a move
+            # Check whose turn it is
+            if self.turn.lower() == "black":
+                # Wait for computer's move to complete
+                print("Waiting for computer (Black) to move...")
+                output = self._read_until_prompt()
+                self._parse_output(output)
+                continue
+                
+            # Generate and make a move as White
             move = self.generate_chess_move()
             print(f"LLM's move: {move}")
             success, output = self.make_move(move)
