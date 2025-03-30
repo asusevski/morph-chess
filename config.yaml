@@ -1,0 +1,8 @@
+llm:
+  provider: "novita"
+  model_id: "deepseek-ai/DeepSeek-R1-Distill-Llama-8B"
+  api_key_env: "HF_API_KEY"
+
+chess:
+  max_moves: 50
+  autosave: true

@@ -4,26 +4,22 @@ import os
 import time
 import sys
 import json
+import yaml
 from typing import Dict, Any, Tuple, List, Optional
 import requests
 from huggingface_hub import InferenceClient
-import os
 import random
 
 
-client = InferenceClient(
-    provider="novita",
-    api_key=os.environ["HF_API_KEY"],
-)
-
-
 class ChessLLMAgent:
-    def __init__(self, chess_script_path: str):
+    def __init__(self, chess_script_path: str, llm_client=None, config=None):
         """
         Initialize the LLM chess agent.
         
         Args:
             chess_script_path: Path to the chess game Python script
+            llm_client: LLM client instance (optional)
+            config: Configuration dictionary (optional)
         """
         self.chess_script_path = chess_script_path
         self.game_id = None
@@ -34,6 +30,8 @@ class ChessLLMAgent:
         self.in_check = False
         self.game_over = False
         self.valid_moves = []
+        self.llm_client = llm_client
+        self.config = config or {}
     
     def start_new_game(self, autosave: bool = True) -> None:
         """Start a new chess game process with optional autosave."""
@@ -387,9 +385,11 @@ class ChessLLMAgent:
         Returns:
             String containing the LLM's response
         """
-        #TODO: update model to new deepseek v3
-        completion = client.chat.completions.create(
-            model = "deepseek-ai/DeepSeek-R1-Distill-Llama-8B",
+        if not self.llm_client:
+            raise ValueError("LLM client not initialized. Please provide a client when creating the agent.")
+            
+        completion = self.llm_client.chat.completions.create(
+            model=self.config.get('llm', {}).get('model_id', "deepseek-ai/DeepSeek-R1-Distill-Llama-8B"),
             messages=[
                 {
                     "role": "user",
@@ -451,7 +451,6 @@ Think about tactics, piece development, king safety, and current material balanc
 First explain your reasoning, then provide ONLY the UCI notation for your chosen move on the final line.
 """
         # Query the LLM
-        # TODO: structured output for valid moves with better error handling
         response = self.query_llm(prompt)
         
         # Extract the move from the response (assuming the move is on the last line)
@@ -465,6 +464,10 @@ First explain your reasoning, then provide ONLY the UCI notation for your chosen
             moves_limit: Maximum number of moves to make
         """
         move_count = 0
+        
+        # Use the moves_limit from config if available
+        if self.config and 'chess' in self.config and 'max_moves' in self.config['chess']:
+            moves_limit = self.config['chess']['max_moves']
         
         # First parse the output to get the current state
         # Important: We need to know whose turn it is (White or Black)
@@ -511,7 +514,67 @@ First explain your reasoning, then provide ONLY the UCI notation for your chosen
             self._send_command("quit")
             self.process.wait(timeout=5)
 
-# Example usage
+
+def load_config(config_path='config.yaml'):
+    """
+    Load configuration from a YAML file.
+    
+    Args:
+        config_path: Path to the configuration file
+        
+    Returns:
+        dict: Configuration dictionary
+    """
+    if not os.path.exists(config_path):
+        print(f"Warning: Configuration file '{config_path}' not found. Using defaults.")
+        return {}
+    
+    try:
+        with open(config_path, 'r') as f:
+            config = yaml.safe_load(f)
+        return config
+    except Exception as e:
+        print(f"Error loading configuration: {str(e)}")
+        return {}
+
+
+def init_llm_client(config):
+    """
+    Initialize the LLM client based on configuration.
+    
+    Args:
+        config: Configuration dictionary
+        
+    Returns:
+        object: Initialized LLM client
+    """
+    if not config or 'llm' not in config:
+        print("Warning: LLM configuration not found. Using defaults.")
+        provider = "novita"
+        api_key_env = "HF_API_KEY"
+    else:
+        provider = config['llm'].get('provider', 'novita')
+        api_key_env = config['llm'].get('api_key_env', 'HF_API_KEY')
+    
+    # Get API key from environment
+    api_key = os.environ.get(api_key_env)
+    if not api_key:
+        raise ValueError(f"API key environment variable '{api_key_env}' not set")
+    
+    # Initialize client
+    if provider.lower() == 'novita':
+        from huggingface_hub import InferenceClient
+        client = InferenceClient(
+            provider="novita",
+            api_key=api_key,
+        )
+    else:
+        raise ValueError(f"Unsupported LLM provider: {provider}")
+    
+    return client
+
+
+# Main function
 if __name__ == "__main__":
     import argparse
     
@@ -520,24 +583,39 @@ if __name__ == "__main__":
     arg_parser.add_argument("--chess", default="./chess_game.py", help="Path to chess game script")
     arg_parser.add_argument("--load", help="Load a saved game file")
     arg_parser.add_argument("--no-autosave", action="store_true", help="Disable auto-saving")
-    arg_parser.add_argument("--moves", type=int, default=3, help="Maximum number of moves to play")
+    arg_parser.add_argument("--moves", type=int, help="Maximum number of moves to play")
     arg_parser.add_argument("--debug", action="store_true", help="Enable debug output")
+    arg_parser.add_argument("--config", default="config.yaml", help="Path to configuration file")
     
     args = arg_parser.parse_args()
     
-    # Create the agent
-    agent = ChessLLMAgent(args.chess)
-    
     try:
+        # Load configuration
+        config = load_config(args.config)
+        
+        # Initialize LLM client
+        llm_client = init_llm_client(config)
+        
+        # Create the agent
+        agent = ChessLLMAgent(args.chess, llm_client=llm_client, config=config)
+        
+        # Determine autosave setting (command-line overrides config)
+        autosave = not args.no_autosave
+        if config and 'chess' in config and 'autosave' in config['chess'] and not args.no_autosave:
+            autosave = config['chess']['autosave']
+        
         if args.load:
             print(f"Loading chess game from: {args.load}")
-            agent.load_game(args.load, autosave=not args.no_autosave)
+            agent.load_game(args.load, autosave=autosave)
         else:
             print("Starting a new chess game...")
-            agent.start_new_game(autosave=not args.no_autosave)
+            agent.start_new_game(autosave=autosave)
+        
+        # Determine moves limit (command-line overrides config)
+        moves_limit = args.moves or (config.get('chess', {}).get('max_moves', 50) if config else 50)
         
         # Play the game
-        agent.play_game(moves_limit=args.moves)
+        agent.play_game(moves_limit=moves_limit)
         
     except Exception as e:
         import traceback
@@ -547,6 +625,7 @@ if __name__ == "__main__":
     finally:
         # Make sure to close the process
         try:
-            agent.close()
+            if 'agent' in locals():
+                agent.close()
         except Exception as close_error:
             print(f"Error during cleanup: {str(close_error)}")
