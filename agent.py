@@ -202,8 +202,9 @@ class ChessLLMAgent:
         Returns:
             String containing the LLM's response
         """
+        #TODO: update model to new deepseek v3
         completion = client.chat.completions.create(
-            model="deepseek-ai/DeepSeek-V3-0324",
+            model = "deepseek-ai/DeepSeek-R1-Distill-Llama-8B",
             messages=[
                 {
                     "role": "user",
@@ -213,6 +214,29 @@ class ChessLLMAgent:
             max_tokens=100,
         )
         return completion.choices[0].message.content
+
+    def _parse_llm_chess_move(self, llm_output: str) -> str:
+        valid_moves = self.get_valid_moves()
+        lines = llm_output.strip().split('\n')
+        last_line = lines[-1].strip()
+        
+        # Look for a valid move format in the last line (a valid UCI move is 4-5 characters)
+        move_match = re.search(r'\b([a-h][1-8][a-h][1-8][qrbnQRBN]?)\b', last_line)
+        if move_match:
+            move = move_match.group(1)
+            return move
+        
+        # If no clear move found, try to find it elsewhere in the response
+        for line in reversed(lines):
+            move_match = re.search(r'\b([a-h][1-8][a-h][1-8][qrbnQRBN]?)\b', line)
+            if move_match:
+                return move_match.group(1)
+        
+        # If still no move found, fall back to a random valid move
+        if valid_moves:
+            return random.choice(valid_moves)
+        
+        return ""
     
     def generate_chess_move(self) -> str:
         """
@@ -246,26 +270,7 @@ First explain your reasoning, then provide ONLY the UCI notation for your chosen
         response = self.query_llm(prompt)
         
         # Extract the move from the response (assuming the move is on the last line)
-        lines = response.strip().split('\n')
-        last_line = lines[-1].strip()
-        
-        # Look for a valid move format in the last line (a valid UCI move is 4-5 characters)
-        move_match = re.search(r'\b([a-h][1-8][a-h][1-8][qrbnQRBN]?)\b', last_line)
-        if move_match:
-            move = move_match.group(1)
-            return move
-        
-        # If no clear move found, try to find it elsewhere in the response
-        for line in reversed(lines):
-            move_match = re.search(r'\b([a-h][1-8][a-h][1-8][qrbnQRBN]?)\b', line)
-            if move_match:
-                return move_match.group(1)
-        
-        # If still no move found, fall back to a random valid move
-        if valid_moves:
-            return random.choice(valid_moves)
-        
-        return ""
+        return self._parse_llm_chess_move(response)
     
     def play_game(self, moves_limit: int = 50) -> None:
         """
