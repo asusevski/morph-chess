@@ -1,9 +1,9 @@
 llm:
   provider: "hf-inference"
-  model_id: "Qwen/QwQ-32B"
+  model_id: "meta-llama/Llama-3.3-70B-Instruct"
   api_key_env: "HF_API_KEY"
   max_tokens: 500
 
 chess:
-  max_moves: 50
+  max_moves: 2
   autosave: true

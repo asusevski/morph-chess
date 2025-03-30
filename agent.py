@@ -11,6 +11,7 @@ from huggingface_hub import InferenceClient
 import random
 import chess
 import argparse
+from schemas import ChessMoveResponse
 
 
 class ChessLLMAgent:
@@ -431,64 +432,136 @@ class ChessLLMAgent:
         
         return True, output
     
-    def query_llm(self, prompt: str) -> str:
+    def query_llm(self, prompt: str, max_retries: int = 3) -> str:
         """
-        Query the LLM for a chess move.
+        Query the LLM for a chess move with retries for structural validation.
         
         Args:
             prompt: Prompt describing the current board state and requesting a move
+            max_retries: Maximum number of retries on validation failure
             
         Returns:
             String containing the LLM's response
         """
         if not self.llm_client:
             raise ValueError("LLM client not initialized. Please provide a client when creating the agent.")
-            
-        completion = self.llm_client.chat.completions.create(
-            model=self.config.get('llm', {}).get('model_id', "deepseek-ai/DeepSeek-R1-Distill-Llama-8B"),
-            messages=[
-                {
-                    "role": "user",
-                    "content": prompt
-                }
-            ],
-            max_tokens=self.config.get('llm', {}).get('max_tokens', 500),
-        )
-        return completion.choices[0].message.content
+        
+        # Try to get a valid response with retries
+        for attempt in range(max_retries):
+            try:
+                completion = self.llm_client.chat.completions.create(
+                    model=self.config.get('llm', {}).get('model_id', "deepseek-ai/DeepSeek-R1-Distill-Llama-8B"),
+                    messages=[
+                        {
+                            "role": "user",
+                            "content": prompt
+                        }
+                    ],
+                    max_tokens=self.config.get('llm', {}).get('max_tokens', 500),
+                )
+                return completion.choices[0].message.content
+            except Exception as e:
+                print(f"Error querying LLM (attempt {attempt+1}/{max_retries}): {str(e)}")
+                if attempt == max_retries - 1:
+                    raise
+        # Should never reach here due to raise in the loop
+        return ""
 
     def _parse_llm_chess_move(self, llm_output: str) -> str:
-        valid_moves = self.get_valid_moves()
-        print(llm_output)
-        lines = llm_output.strip().split('\n')
-        last_line = lines[-1].strip()
+        """
+        Parse the LLM output to extract a structured chess move response.
+        If the output doesn't contain valid JSON, attempt to extract a move using regex.
         
-        # Look for a valid move format in the last line (a valid UCI move is 4-5 characters)
+        Args:
+            llm_output: The raw output from the LLM
+            
+        Returns:
+            The selected move in UCI format
+        """
+        valid_moves = self.get_valid_moves()
+        
+        # First look for JSON structure in the response
+        import json
+        import re
+        
+        # Try to extract JSON from the response (it might be embedded in other text)
+        json_pattern = r'```json\s*(.*?)\s*```|```\s*(.*?)\s*```|\{.*"selected_move".*\}'
+        json_matches = re.findall(json_pattern, llm_output, re.DOTALL)
+        
+        # Process potential JSON matches
+        for match_groups in json_matches:
+            for match in match_groups:
+                if not match:
+                    continue
+                    
+                match = match.strip()
+                # Ensure it starts with {
+                if not match.startswith('{'):
+                    continue
+                    
+                try:
+                    # Try to parse as JSON
+                    move_data = json.loads(match)
+                    
+                    # Validate the structure using our Pydantic model
+                    from pydantic import ValidationError
+                    try:
+                        # Import locally to avoid circular imports
+                        move_response = ChessMoveResponse(**move_data)
+                        
+                        # Verify the selected move is in valid moves
+                        if move_response.selected_move in valid_moves:
+                            print(f"Successfully parsed structured move: {move_response.selected_move}")
+                            return move_response.selected_move
+                        else:
+                            print(f"Warning: Selected move {move_response.selected_move} is not valid")
+                    except ValidationError as e:
+                        print(f"Validation error in move data: {e}")
+                except json.JSONDecodeError:
+                    print(f"Failed to parse JSON: {match}")
+        
+        # Fallback to regex if JSON parsing failed
+        print("Falling back to regex pattern matching")
+        lines = llm_output.strip().split('\n')
+        
+        # First check the last line, which is most likely to contain just the move
+        last_line = lines[-1].strip()
         move_match = re.search(r'\b([a-h][1-8][a-h][1-8][qrbnQRBN]?)\b', last_line)
         if move_match:
             move = move_match.group(1)
-            return move
+            if move in valid_moves:
+                return move
         
-        # If no clear move found, try to find it elsewhere in the response
+        # If no valid move in last line, search the entire response
         for line in reversed(lines):
             move_match = re.search(r'\b([a-h][1-8][a-h][1-8][qrbnQRBN]?)\b', line)
             if move_match:
-                return move_match.group(1)
+                move = move_match.group(1)
+                if move in valid_moves:
+                    return move
         
         # If still no move found, fall back to a random valid move
         if valid_moves:
-            return random.choice(valid_moves)
+            selected_move = random.choice(valid_moves)
+            print(f"No valid move found in response, using random move: {selected_move}")
+            return selected_move
         
         return ""
-    
+
     def generate_chess_move(self) -> str:
         """
         Generate a chess move using the LLM based on current board state.
+        Uses structured output to get a reliable move.
         
         Returns:
             Move in UCI format (e.g., "e2e4")
         """
         # Get valid moves
         valid_moves = self.get_valid_moves()
+        
+        # If no valid moves, return empty string
+        if not valid_moves:
+            return ""
         
         # Get FEN representation if we have a chess_board
         fen_representation = ""
@@ -501,34 +574,86 @@ class ChessLLMAgent:
             # truncate move history if too long
             if len(move_history) > 25:
                 move_history = move_history[-25:]
-
+    
+        # Instructions for structured response format
+        structured_output_instructions = """
+    You must respond with a structured JSON object containing your selected move and alternatives.
+    The JSON object should have the following format:
+    {
+      "selected_move": "e2e4",  // Your primary chosen move in UCI format
+      "alternative_moves": ["d2d4", "g1f3"],  // At least one alternative move
+      "reasoning": "I chose e2e4 because it controls the center and opens lines for bishop development."
+    }
+    
+    Only select moves from the provided valid moves list. Your selection must be a valid UCI format move.
+    Place the JSON output at the end of your response, enclosed in ```json and ``` tags.
+    """
+    
         prompt = f"""
-You are playing chess as White. Your goal is to choose the best move.
-
-Current board state:
-{self.board_state}
-
-Move history:
-{', '.join(move_history) if move_history else "No previous moves."}
-
-FEN notation:
-{fen_representation}
-
-Current evaluation: {self.evaluation}
-{"You are in CHECK!" if self.in_check else ""}
-
-Valid moves (in UCI format):
-{', '.join(valid_moves)}
-
-Analyze the position and recommend a single move in UCI format (e.g., "e2e4").
-Think about tactics, piece development, king safety, and current material balance.
-First explain your reasoning, then provide ONLY the UCI notation for your chosen move on the final line.
-"""
-        # Query the LLM
-        response = self.query_llm(prompt)
+    You are playing chess as White. Your goal is to choose the best move.
+    
+    Current board state:
+    {self.board_state}
+    
+    Move history:
+    {', '.join(move_history) if move_history else "No previous moves."}
+    
+    FEN notation:
+    {fen_representation}
+    
+    Current evaluation: {self.evaluation}
+    {"You are in CHECK!" if self.in_check else ""}
+    
+    Valid moves (in UCI format):
+    {', '.join(valid_moves)}
+    
+    Analyze the position and select the best move from the valid moves list.
+    Think about tactics, piece development, king safety, and current material balance.
+    Explain your reasoning, then provide your structured response.
+    
+    {structured_output_instructions}
+    """
+        # Keep track of attempts to get a structured response
+        max_attempts = 1
+        for attempt in range(max_attempts):
+            # Query the LLM
+            response = self.query_llm(prompt)
+            print(response)
+            
+            # Try to parse the move from structured output
+            move = self._parse_llm_chess_move(response)
+            
+            # If we got a valid move, return it
+            if move and move in valid_moves:
+                return move
+                
+            # If we didn't get a valid move, add more explicit instructions
+            if attempt < max_attempts - 1:
+                print(f"Attempt {attempt+1} failed to get a valid structured response. Trying again with more guidance.")
+                # Add more explicit instructions for the retry
+                prompt += f"""
+    
+    IMPORTANT: Your previous response could not be correctly parsed. 
+    Please ensure your response ends with a properly formatted JSON object like this:
+    
+    ```json
+    {{
+      "selected_move": "One of these valid moves: {', '.join(valid_moves[:5])}...",
+      "alternative_moves": ["Another valid move", "A third valid move"],
+      "reasoning": "Brief explanation of your choice"
+    }}
+    ```
+    
+    Choose your move from these valid options: {', '.join(valid_moves)}
+    """
         
-        # Extract the move from the response (assuming the move is on the last line)
-        return self._parse_llm_chess_move(response)
+        # If all attempts failed, fall back to a random valid move
+        if valid_moves:
+            selected_move = random.choice(valid_moves)
+            print(f"Failed to get structured response after {max_attempts} attempts. Using random move: {selected_move}")
+            return selected_move
+            
+        return ""
     
     def play_game(self, moves_limit: int = 50) -> None:
         """
