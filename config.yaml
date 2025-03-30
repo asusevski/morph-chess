@@ -1,7 +1,8 @@
 llm:
-  provider: "novita"
-  model_id: "deepseek-ai/DeepSeek-R1-Distill-Llama-8B"
+  provider: "hf-inference"
+  model_id: "Qwen/QwQ-32B"
   api_key_env: "HF_API_KEY"
+  max_tokens: 500
 
 chess:
   max_moves: 50

@@ -90,7 +90,7 @@ class IllegalMoveError(Exception):
     pass
 
 # Functions to save and load game state
-def save_game(board, game_id, filepath=None):
+def save_game(board, game_id, filepath=None, move_timestamps=None):
     """
     Save the current game state to a text file.
     
@@ -98,6 +98,7 @@ def save_game(board, game_id, filepath=None):
         board (chess.Board): The current chess board
         game_id (str): The UUID of the game
         filepath (str, optional): Custom filepath. If None, uses game_id as filename.
+        move_timestamps (dict, optional): Dictionary mapping move indices to timestamps
     
     Returns:
         str: Path to the saved game file
@@ -105,12 +106,28 @@ def save_game(board, game_id, filepath=None):
     if filepath is None:
         filepath = f"chess_game_{game_id}.json"
     
+    # Create or update move timestamps
+    if move_timestamps is None:
+        move_timestamps = {}
+    
+    # Add timestamp for the current move if it doesn't exist
+    current_move_index = len(board.move_stack)
+    if current_move_index > 0 and current_move_index not in move_timestamps:
+        move_timestamps[current_move_index] = datetime.now().isoformat()
+    
+    # Convert move timestamps keys to strings for JSON serialization
+    string_move_timestamps = {str(k): v for k, v in move_timestamps.items()}
+    
     game_data = {
         "game_id": game_id,
         "fen": board.fen(),
         "move_history": [move.uci() for move in board.move_stack],
-        "saved_at": datetime.now().isoformat()
+        "move_timestamps": string_move_timestamps,
+        "last_updated": datetime.now().isoformat()
     }
+    
+    # Ensure the directory exists
+    os.makedirs(os.path.dirname(filepath), exist_ok=True)
     
     with open(filepath, 'w') as f:
         json.dump(game_data, f, indent=2)
@@ -125,7 +142,7 @@ def load_game(filepath):
         filepath (str): Path to the saved game file
     
     Returns:
-        tuple: (chess.Board, str) - Loaded chess board and game ID
+        tuple: (chess.Board, str, dict) - Loaded chess board, game ID, and move timestamps
     
     Raises:
         FileNotFoundError: If the file doesn't exist
@@ -152,6 +169,11 @@ def load_game(filepath):
     except ValueError as e:
         raise ValueError(f"Invalid FEN in game file: {str(e)}")
     
+    # Extract move timestamps (convert keys back to integers)
+    move_timestamps = {}
+    if "move_timestamps" in game_data:
+        move_timestamps = {int(k): v for k, v in game_data["move_timestamps"].items()}
+    
     # Optionally replay moves
     if "move_history" in game_data:
         # Clear the move stack first (since we loaded from FEN)
@@ -170,7 +192,7 @@ def load_game(filepath):
                 # Skip invalid UCI strings
                 continue
     
-    return board, game_data["game_id"]
+    return board, game_data["game_id"], move_timestamps
 
 def make_random_move(board):
     """
@@ -351,10 +373,18 @@ def game_loop():
     parser.add_argument("--autosave", action="store_true", help="Automatically save the game after every move")
     args = parser.parse_args()
     
+    # Create save directory
+    autosave_dir = "chess_autosaves"
+    if not os.path.exists(autosave_dir):
+        os.makedirs(autosave_dir)
+    
+    # Dictionary to track move timestamps
+    move_timestamps = {}
+    
     # Either load a game or start a new one
     if args.load:
         try:
-            board, game_id = load_game(args.load)
+            board, game_id, move_timestamps = load_game(args.load)
             print(f"Loaded game with ID: {game_id}")
         except (FileNotFoundError, ValueError) as e:
             print(f"Error loading game: {e}")
@@ -363,10 +393,8 @@ def game_loop():
         board, game_id = initialize_board()
         print(f"New game started with ID: {game_id}")
     
-    # Create save directory if using autosave
-    autosave_dir = "chess_autosaves"
-    if args.autosave and not os.path.exists(autosave_dir):
-        os.makedirs(autosave_dir)
+    # Define the autosave file path
+    autosave_path = os.path.join(autosave_dir, f"game_id_{game_id}.json")
         
     print("\nWelcome to Chess!")
     print("You play as White, computer plays as Black")
@@ -379,7 +407,7 @@ def game_loop():
     
     if args.autosave:
         print("\nAuto-save is enabled. Game will be saved after every move.")
-        print(f"Auto-save files will be stored in the '{autosave_dir}' directory.")
+        print(f"Auto-save file: {autosave_path}")
     
     # Main game loop
     while True:
@@ -390,6 +418,11 @@ def game_loop():
         if status['is_over']:
             print(f"\nGame over! Result: {status['result']}")
             print(f"Reason: {status['reason']}")
+            
+            # Save the final state if autosave is enabled
+            if args.autosave:
+                save_game(board, game_id, autosave_path, move_timestamps)
+                print(f"Final game state saved to: {autosave_path}")
             break
         
         # Human's turn (White)
@@ -400,8 +433,10 @@ def game_loop():
                 print("Thanks for playing!")
                 break
             elif user_input == 'save':
-                filepath = save_game(board, game_id)
-                print(f"Game saved to: {filepath}")
+                # Save to a custom file in the main directory
+                custom_filepath = f"chess_game_{game_id}.json"
+                save_game(board, game_id, custom_filepath, move_timestamps)
+                print(f"Game saved to: {custom_filepath}")
                 print(f"Game ID: {game_id}")
                 continue
             elif user_input == 'help':
@@ -420,10 +455,12 @@ def game_loop():
             try:
                 board = make_move(board, user_input)
                 
+                # Record timestamp for this move
+                move_timestamps[len(board.move_stack)] = datetime.now().isoformat()
+                
                 # Auto-save after player's move if enabled
                 if args.autosave:
-                    autosave_path = os.path.join(autosave_dir, f"chess_game_{game_id}_move_{len(board.move_stack)}.json")
-                    save_game(board, game_id, autosave_path)
+                    save_game(board, game_id, autosave_path, move_timestamps)
                     print(f"Game auto-saved to: {autosave_path}")
             except (ValueError, IllegalMoveError) as e:
                 print(f"Error: {e}")
@@ -438,10 +475,12 @@ def game_loop():
                 random_move = make_random_move(board)
                 print(f"Computer's move: {random_move.uci()}")
                 
+                # Record timestamp for this move
+                move_timestamps[len(board.move_stack)] = datetime.now().isoformat()
+                
                 # Auto-save after computer's move if enabled
                 if args.autosave:
-                    autosave_path = os.path.join(autosave_dir, f"chess_game_{game_id}_move_{len(board.move_stack)}.json")
-                    save_game(board, game_id, autosave_path)
+                    save_game(board, game_id, autosave_path, move_timestamps)
                     print(f"Game auto-saved to: {autosave_path}")
             except ValueError as e:
                 print(f"Error: {e}")

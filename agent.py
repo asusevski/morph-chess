@@ -9,6 +9,8 @@ from typing import Dict, Any, Tuple, List, Optional
 import requests
 from huggingface_hub import InferenceClient
 import random
+import chess
+import argparse
 
 
 class ChessLLMAgent:
@@ -32,6 +34,7 @@ class ChessLLMAgent:
         self.valid_moves = []
         self.llm_client = llm_client
         self.config = config or {}
+        self.chess_board = None  # Chess board object for easier move generation and FEN access
     
     def start_new_game(self, autosave: bool = True) -> None:
         """Start a new chess game process with optional autosave."""
@@ -115,6 +118,9 @@ class ChessLLMAgent:
         print("Initial chess output received, parsing board state...")
         # Parse the initial board state
         self._parse_output(output)
+        
+        # Initialize the chess board object with the standard starting position
+        self.chess_board = chess.Board()
     
     def load_game(self, save_file: str, autosave: bool = True) -> None:
         """Load a saved chess game."""
@@ -148,6 +154,7 @@ class ChessLLMAgent:
         
         # Variables to track readiness indicators
         game_id_found = False
+        fen_found = False
         
         # Read output with timeout
         while time.time() - start_time < timeout:
@@ -198,6 +205,20 @@ class ChessLLMAgent:
         print("Initial chess output received, parsing board state...")
         # Parse the initial board state
         self._parse_output(output)
+        
+        # Try to load the FEN from the save file to initialize our chess_board
+        try:
+            with open(save_file, 'r') as f:
+                save_data = json.load(f)
+                if "fen" in save_data:
+                    self.chess_board = chess.Board(save_data["fen"])
+                else:
+                    # If no FEN in save file, initialize with standard position
+                    self.chess_board = chess.Board()
+        except (FileNotFoundError, json.JSONDecodeError, ValueError) as e:
+            print(f"Error loading FEN from save file: {e}")
+            # Initialize with standard position as fallback
+            self.chess_board = chess.Board()
     
     def _parse_output(self, output: str) -> None:
         """Parse the chess game output to extract board state and other information."""
@@ -234,6 +255,10 @@ class ChessLLMAgent:
         turn_match = re.search(r'(Current turn|Turn)[:\s]*(White|Black)', output, re.IGNORECASE)
         if turn_match:
             self.turn = turn_match.group(2)
+            
+            # Update chess_board turn if it's initialized
+            if self.chess_board:
+                self.chess_board.turn = self.turn.lower() == "white"
         
         # Extract evaluation - more flexible pattern
         eval_match = re.search(r'Evaluation:?\s*([+-]?[\d.]+|\+∞|-∞)', output)
@@ -284,6 +309,10 @@ class ChessLLMAgent:
             uci_moves = re.findall(r'\b([a-h][1-8][a-h][1-8][qrbnQRBN]?)\b', output)
             if uci_moves:
                 self.valid_moves = uci_moves
+                
+        # If we still don't have valid moves but have a chess_board, get them from there
+        if not self.valid_moves and self.chess_board:
+            self.valid_moves = [move.uci() for move in self.chess_board.legal_moves]
     
     def get_valid_moves(self) -> List[str]:
         """Get a list of valid moves in UCI format."""
@@ -291,6 +320,11 @@ class ChessLLMAgent:
         self._send_command("moves")
         output = self._read_until_prompt()
         self._parse_output(output)
+        
+        # If we have a chess_board object, use it to get valid moves directly
+        if self.chess_board:
+            self.valid_moves = [move.uci() for move in self.chess_board.legal_moves]
+            
         return self.valid_moves
     
     def _send_command(self, command: str) -> None:
@@ -362,6 +396,28 @@ class ChessLLMAgent:
         output = self._read_until_prompt()
         self._parse_output(output)
         
+        # Update our internal chess_board if the move was successful
+        if "Error" not in output and self.chess_board:
+            try:
+                chess_move = chess.Move.from_uci(move)
+                if chess_move in self.chess_board.legal_moves:
+                    self.chess_board.push(chess_move)
+                    
+                    # Also check for and apply the computer's move if it's in the output
+                    computer_move = None
+                    if "Computer's move:" in output:
+                        computer_move_match = re.search(r"Computer's move: (\w+)", output)
+                        if computer_move_match:
+                            computer_move = computer_move_match.group(1)
+                            try:
+                                computer_chess_move = chess.Move.from_uci(computer_move)
+                                if computer_chess_move in self.chess_board.legal_moves:
+                                    self.chess_board.push(computer_chess_move)
+                            except ValueError:
+                                print(f"Warning: Could not parse computer move: {computer_move}")
+            except ValueError:
+                print(f"Warning: Could not parse move: {move}")
+        
         # Check if move was successful
         if "Error" in output:
             return False, output
@@ -396,12 +452,13 @@ class ChessLLMAgent:
                     "content": prompt
                 }
             ],
-            max_tokens=100,
+            max_tokens=self.config.get('llm', {}).get('max_tokens', 500),
         )
         return completion.choices[0].message.content
 
     def _parse_llm_chess_move(self, llm_output: str) -> str:
         valid_moves = self.get_valid_moves()
+        print(llm_output)
         lines = llm_output.strip().split('\n')
         last_line = lines[-1].strip()
         
@@ -433,12 +490,20 @@ class ChessLLMAgent:
         # Get valid moves
         valid_moves = self.get_valid_moves()
         
+        # Get FEN representation if we have a chess_board
+        fen_representation = ""
+        if self.chess_board:
+            fen_representation = self.chess_board.fen()
+        
         # Create a prompt for the LLM
         prompt = f"""
 You are playing chess as White. Your goal is to choose the best move.
 
 Current board state:
 {self.board_state}
+
+FEN notation:
+{fen_representation}
 
 Current evaluation: {self.evaluation}
 {"You are in CHECK!" if self.in_check else ""}
@@ -560,23 +625,15 @@ def init_llm_client(config):
     api_key = os.environ.get(api_key_env)
     if not api_key:
         raise ValueError(f"API key environment variable '{api_key_env}' not set")
-    
-    # Initialize client
-    if provider.lower() == 'novita':
-        from huggingface_hub import InferenceClient
-        client = InferenceClient(
-            provider="novita",
-            api_key=api_key,
-        )
-    else:
-        raise ValueError(f"Unsupported LLM provider: {provider}")
-    
+    client = InferenceClient(
+        provider=provider,
+        api_key=api_key,
+    )
     return client
 
 
 # Main function
 if __name__ == "__main__":
-    import argparse
     
     # Set up command line arguments
     arg_parser = argparse.ArgumentParser(description="LLM Chess Agent")
