@@ -7,8 +7,6 @@ import json
 from typing import Dict, Any, Tuple, List, Optional
 import requests
 from huggingface_hub import InferenceClient
-import os
-import random
 
 
 client = InferenceClient(
@@ -56,7 +54,7 @@ class ChessLLMAgent:
         # Get initial output including game ID with timeout protection
         output = ""
         start_time = time.time()
-        timeout = 20  # 20 seconds timeout
+        timeout = 20  # 20 seconds timeout (increased from 10)
         
         # First check if the process started correctly
         if self.process.poll() is not None:
@@ -116,6 +114,11 @@ class ChessLLMAgent:
         print("Initial chess output received, parsing board state...")
         # Parse the initial board state
         self._parse_output(output)
+        
+        # Send a newline to the process to potentially wake it up if it's waiting for input
+        if game_id_found and board_found and "Your move" not in output:
+            print("Sending newline to prompt the game...")
+            self._send_command("")
     
     def load_game(self, save_file: str, autosave: bool = True) -> None:
         """Load a saved chess game."""
@@ -138,7 +141,7 @@ class ChessLLMAgent:
         # Get initial output with timeout protection
         output = ""
         start_time = time.time()
-        timeout = 20  # 20 seconds timeout
+        timeout = 20  # 20 seconds timeout (increased from 10)
         
         # First check if the process started correctly
         if self.process.poll() is not None:
@@ -198,6 +201,11 @@ class ChessLLMAgent:
         print("Initial chess output received, parsing board state...")
         # Parse the initial board state
         self._parse_output(output)
+        
+        # Send a newline to the process to potentially wake it up if it's waiting for input
+        if game_id_found and board_found and "Your move" not in output:
+            print("Sending newline to prompt the game...")
+            self._send_command("")
     
     def _parse_output(self, output: str) -> None:
         """Parse the chess game output to extract board state and other information."""
@@ -291,19 +299,34 @@ class ChessLLMAgent:
         self._send_command("moves")
         output = self._read_until_prompt()
         self._parse_output(output)
+        
+        # If no valid moves were found through parsing, try to make an educated guess
+        # This is a fallback if the output format doesn't match expectations
+        if not self.valid_moves and self.board_state:
+            print("No valid moves found in output. Attempting to detect moves from board state...")
+            # Try to detect common patterns in the output
+            move_pattern = r'([a-h][1-8][a-h][1-8][qrbnQRBN]?)'
+            potential_moves = re.findall(move_pattern, output)
+            if potential_moves:
+                print(f"Potential moves detected: {potential_moves}")
+                self.valid_moves = potential_moves
+            
         return self.valid_moves
     
     def _send_command(self, command: str) -> None:
         """Send a command to the chess process."""
         if self.process and self.process.poll() is None:
+            print(f"Sending command: {command}")
             self.process.stdin.write(f"{command}\n")
             self.process.stdin.flush()
+        else:
+            print("Warning: Cannot send command - process is not running")
     
     def _read_until_prompt(self) -> str:
         """Read output from the chess process until a new prompt appears, with timeout."""
         output = ""
         start_time = time.time()
-        timeout = 15  # 15 seconds timeout
+        timeout = 15  # 15 seconds timeout (increased from 10)
         
         board_pattern_found = False
         
@@ -318,18 +341,34 @@ class ChessLLMAgent:
                     break
                 
                 output += line
+                print(f"Read: {line.strip()}")
                 
                 # Check for board output (looking for chess board pattern)
                 if any(rank_indicator in line for rank_indicator in [' 8 ', ' 7 ', ' 6 ', ' 5 ', ' 4 ', ' 3 ', ' 2 ', ' 1 ']):
                     board_pattern_found = True
                 
                 # If we've reached a prompt, we can stop reading
-                if "Your move" in line or "Enter moves in UCI format" in line or "Game over" in line:
+                if "Your move" in line or "Enter moves in UCI format" in line:
                     return output
             
             # If we've found a board representation and collected a reasonable amount of output,
             # we can consider the response complete after a certain amount of time with no output
-            if board_pattern_found and len(output) > 100 and time.time() - start_time > 5:
+            if board_pattern_found and len(output) > 100 and time.time() - start_time > 7:
+                last_output_time = time.time()
+                # Wait a short time to see if more output comes
+                while time.time() - last_output_time < 2:
+                    readable, _, _ = select.select([self.process.stdout], [], [], 0.5)
+                    if readable:
+                        line = self.process.stdout.readline()
+                        if line:
+                            output += line
+                            print(f"Read: {line.strip()}")
+                            last_output_time = time.time()
+                            # If we now found a prompt, return
+                            if "Your move" in line or "Enter moves in UCI format" in line:
+                                return output
+                
+                print("Board found and output collection complete. Assuming ready for next input.")
                 return output
             
             # Check if process is still running
@@ -339,7 +378,7 @@ class ChessLLMAgent:
                 return output
         
         # If we get here, we timed out
-        print(f"Warning: Timed out waiting for prompt after {timeout} seconds")
+        print(f"Warning: Timed out waiting for prompt. Last output: {output}")
         return output
     
     def make_move(self, move: str) -> Tuple[bool, str]:
@@ -362,19 +401,23 @@ class ChessLLMAgent:
         output = self._read_until_prompt()
         self._parse_output(output)
         
-        # Check if move was successful
-        if "Error" in output:
+        # Check if move was successful by looking for common error indicators
+        if "Error" in output or "Invalid" in output or "illegal" in output.lower():
             return False, output
+        
+        # Another way to check: if the board state hasn't changed
+        # Note: This isn't perfect but can help catch some issues
+        # This would require saving the board state before making the move
         
         # Read computer's move response if it's in the output
         computer_move = None
-        if "Computer's move:" in output:
-            computer_move_match = re.search(r"Computer's move: (\w+)", output)
-            if computer_move_match:
-                computer_move = computer_move_match.group(1)
+        computer_move_match = re.search(r"Computer('s| is) (move|thinking|playing)[:.]? (\w+)", output, re.IGNORECASE)
+        if computer_move_match:
+            computer_move = computer_move_match.group(3)
+            print(f"Detected computer's move: {computer_move}")
         
         return True, output
-    
+   
     def query_llm(self, prompt: str) -> str:
         """
         Query the LLM for a chess move.
@@ -385,9 +428,8 @@ class ChessLLMAgent:
         Returns:
             String containing the LLM's response
         """
-        #TODO: update model to new deepseek v3
         completion = client.chat.completions.create(
-            model = "deepseek-ai/DeepSeek-R1-Distill-Llama-8B",
+            model="deepseek-ai/DeepSeek-V3-0324",
             messages=[
                 {
                     "role": "user",
@@ -397,29 +439,6 @@ class ChessLLMAgent:
             max_tokens=100,
         )
         return completion.choices[0].message.content
-
-    def _parse_llm_chess_move(self, llm_output: str) -> str:
-        valid_moves = self.get_valid_moves()
-        lines = llm_output.strip().split('\n')
-        last_line = lines[-1].strip()
-        
-        # Look for a valid move format in the last line (a valid UCI move is 4-5 characters)
-        move_match = re.search(r'\b([a-h][1-8][a-h][1-8][qrbnQRBN]?)\b', last_line)
-        if move_match:
-            move = move_match.group(1)
-            return move
-        
-        # If no clear move found, try to find it elsewhere in the response
-        for line in reversed(lines):
-            move_match = re.search(r'\b([a-h][1-8][a-h][1-8][qrbnQRBN]?)\b', line)
-            if move_match:
-                return move_match.group(1)
-        
-        # If still no move found, fall back to a random valid move
-        if valid_moves:
-            return random.choice(valid_moves)
-        
-        return ""
     
     def generate_chess_move(self) -> str:
         """
@@ -448,12 +467,33 @@ Analyze the position and recommend a single move in UCI format (e.g., "e2e4").
 Think about tactics, piece development, king safety, and current material balance.
 First explain your reasoning, then provide ONLY the UCI notation for your chosen move on the final line.
 """
-        # Query the LLM
+        
         # TODO: structured output for valid moves with better error handling
         response = self.query_llm(prompt)
+        print(response)
         
         # Extract the move from the response (assuming the move is on the last line)
-        return self._parse_llm_chess_move(response)
+        lines = response.strip().split('\n')
+        last_line = lines[-1].strip()
+        
+        # Look for a valid move format in the last line (a valid UCI move is 4-5 characters)
+        move_match = re.search(r'\b([a-h][1-8][a-h][1-8][qrbnQRBN]?)\b', last_line)
+        if move_match:
+            move = move_match.group(1)
+            return move
+        
+        # If no clear move found, try to find it elsewhere in the response
+        for line in reversed(lines):
+            move_match = re.search(r'\b([a-h][1-8][a-h][1-8][qrbnQRBN]?)\b', line)
+            if move_match:
+                return move_match.group(1)
+        
+        # If still no move found, fall back to a random valid move
+        if valid_moves:
+            import random
+            return random.choice(valid_moves)
+        
+        return ""
     
     def play_game(self, moves_limit: int = 50) -> None:
         """
@@ -503,7 +543,7 @@ if __name__ == "__main__":
     arg_parser.add_argument("--chess", default="./chess_game.py", help="Path to chess game script")
     arg_parser.add_argument("--load", help="Load a saved game file")
     arg_parser.add_argument("--no-autosave", action="store_true", help="Disable auto-saving")
-    arg_parser.add_argument("--moves", type=int, default=3, help="Maximum number of moves to play")
+    arg_parser.add_argument("--moves", type=int, default=30, help="Maximum number of moves to play")
     arg_parser.add_argument("--debug", action="store_true", help="Enable debug output")
     
     args = arg_parser.parse_args()
