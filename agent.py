@@ -6,7 +6,6 @@ import sys
 import json
 import yaml
 from typing import Dict, Any, Tuple, List, Optional
-import requests
 from huggingface_hub import InferenceClient
 import random
 import chess
@@ -582,7 +581,6 @@ class ChessLLMAgent:
     {
       "selected_move": "e2e4",  // Your primary chosen move in UCI format
       "alternative_moves": ["d2d4", "g1f3"],  // At least one alternative move
-      "reasoning": "I chose e2e4 because it controls the center and opens lines for bishop development."
     }
     
     Only select moves from the provided valid moves list. Your selection must be a valid UCI format move.
@@ -607,11 +605,11 @@ class ChessLLMAgent:
     Valid moves (in UCI format):
     {', '.join(valid_moves)}
     
-    Analyze the position and select the best move from the valid moves list.
-    Think about tactics, piece development, king safety, and current material balance.
-    Explain your reasoning, then provide your structured response.
-    
     {structured_output_instructions}
+
+    Return nothing but the json output. No yapping.
+
+    Your move:
     """
         # Keep track of attempts to get a structured response
         max_attempts = 1
