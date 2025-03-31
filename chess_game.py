@@ -55,6 +55,7 @@ def game_loop():
     parser = argparse.ArgumentParser(description="Chess game with save/load functionality")
     parser.add_argument("--load", help="Load a saved game file")
     parser.add_argument("--autosave", action="store_true", help="Automatically save the game after every move")
+    parser.add_argument("--game-id", help="Specify a custom game ID")
     args = parser.parse_args()
     
     # Create save directory
@@ -69,7 +70,7 @@ def game_loop():
             print(f"Error loading game: {e}")
             return
     else:
-        engine = ChessEngine(autosave=args.autosave, autosave_dir=autosave_dir)
+        engine = ChessEngine(autosave=args.autosave, autosave_dir=autosave_dir, game_id=args.game_id)
         print(f"New game started with ID: {engine.game_id}")
     
     # Define the autosave file path

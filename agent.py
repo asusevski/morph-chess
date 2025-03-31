@@ -42,6 +42,10 @@ class ChessLLMAgent:
         if autosave:
             cmd.append("--autosave")
         
+        # Add game ID if specified
+        if self.game_id:
+            cmd.extend(["--game-id", self.game_id])
+        
         print(f"Starting chess process with command: {' '.join(cmd)}")
         
         # Start the chess process
@@ -127,6 +131,10 @@ class ChessLLMAgent:
         cmd = [sys.executable, self.chess_script_path, "--load", save_file]
         if autosave:
             cmd.append("--autosave")
+            
+        # Add game ID if specified (though it will be loaded from save file)
+        if self.game_id:
+            cmd.extend(["--game-id", self.game_id])
         
         print(f"Loading chess game with command: {' '.join(cmd)}")
             
@@ -764,7 +772,6 @@ def init_llm_client(config):
     return client
 
 
-# Main function
 if __name__ == "__main__":
     
     # Set up command line arguments
@@ -775,6 +782,7 @@ if __name__ == "__main__":
     arg_parser.add_argument("--moves", type=int, help="Maximum number of moves to play")
     arg_parser.add_argument("--debug", action="store_true", help="Enable debug output")
     arg_parser.add_argument("--config", default="config.yaml", help="Path to configuration file")
+    arg_parser.add_argument("--game-id", help="Specify a custom game ID")
     
     args = arg_parser.parse_args()
     
@@ -787,6 +795,11 @@ if __name__ == "__main__":
         
         # Create the agent
         agent = ChessLLMAgent(args.chess, llm_client=llm_client, config=config)
+        
+        # Set custom game ID if provided
+        if args.game_id:
+            print(f"Using custom game ID: {args.game_id}")
+            agent.game_id = args.game_id
         
         # Determine autosave setting (command-line overrides config)
         autosave = not args.no_autosave

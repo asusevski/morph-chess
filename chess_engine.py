@@ -8,7 +8,7 @@ class ChessEngine:
     """
     A chess engine that maintains game state and provides methods for gameplay.
     """
-    def __init__(self, load_path=None, autosave=True, autosave_dir="chess_autosaves"):
+    def __init__(self, load_path=None, autosave=True, autosave_dir="chess_autosaves", game_id=None):
         """
         Initialize a new chess engine.
         
@@ -16,6 +16,7 @@ class ChessEngine:
             load_path (str): Path to a saved game to load
             autosave (bool): Whether to automatically save the game after moves
             autosave_dir (str): Directory for autosave files
+            game_id (str): Optional custom game ID to use
         """
         # Create save directory if it doesn't exist
         self.autosave_dir = autosave_dir
@@ -30,7 +31,8 @@ class ChessEngine:
             self._load_game(load_path)
         else:
             self.board = chess.Board()
-            self.game_id = str(uuid.uuid4())
+            # Use the provided game_id or generate a new one
+            self.game_id = game_id if game_id is not None else str(uuid.uuid4())
         
         # Set up autosave path
         self.autosave_path = os.path.join(self.autosave_dir, f"game_id_{self.game_id}.json")
