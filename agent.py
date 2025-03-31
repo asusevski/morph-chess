@@ -11,6 +11,7 @@ import random
 import chess
 import argparse
 from schemas import ChessMoveResponse
+from openai import OpenAI
 
 
 class ChessLLMAgent:
@@ -759,17 +760,26 @@ def init_llm_client(config):
         api_key_env = "HF_API_KEY"
     else:
         provider = config['llm'].get('provider', 'novita')
-        api_key_env = config['llm'].get('api_key_env', 'HF_API_KEY')
-    
-    # Get API key from environment
-    api_key = os.environ.get(api_key_env)
-    if not api_key:
-        raise ValueError(f"API key environment variable '{api_key_env}' not set")
-    client = InferenceClient(
-        provider=provider,
-        api_key=api_key,
-    )
-    return client
+        # TODO: note down valid providers somewhere
+        if provider == "openai":
+            api_key_env = config['llm'].get('api_key_env', 'OPENAI_API_KEY')
+            api_key = os.environ.get(api_key_env)
+            if not api_key:
+                raise ValueError(f"API key environment variable '{api_key_env}' not set")
+            client = OpenAI()
+            return client
+        elif provider == "anthropic":
+            pass
+        else:
+            api_key_env = config['llm'].get('api_key_env', 'HF_API_KEY')
+            api_key = os.environ.get(api_key_env)
+            if not api_key:
+                raise ValueError(f"API key environment variable '{api_key_env}' not set")
+            client = InferenceClient(
+                provider=provider,
+                api_key=api_key,
+            )
+            return client
 
 
 if __name__ == "__main__":
