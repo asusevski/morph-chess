@@ -1,0 +1,180 @@
+[Skip to main content](https://cloud.morph.so/docs/documentation/instances/command-execution#__docusaurus_skipToContent_fallback)
+
+On this page
+
+Morph Cloud provides robust capabilities for executing commands on your instances, whether you need to run a single command or a sequence of comm
+ands.
+
+## Execute Commands on Instance [​](https://cloud.morph.so/docs/documentation/instances/command-execution\#execute-commands-on-instance "Direct li
+nk to Execute Commands on Instance")
+
+- Python
+- TypeScript
+- CLI
+
+```codeBlockLines_e6Vv
+from morphcloud.api import MorphCloudClient
+
+client = MorphCloudClient()
+
+instance_id = "morphvm_abc123" # Replace with a valid instance ID
+instance = client.instances.get(instance_id=instance_id)
+
+result = instance.exec(command="uname -a")
+
+print(f"Exit Code: {result.exit_code}")
+print(f"Stdout:\n{result.stdout}")
+print(f"Stderr:\n{result.stderr}")
+
+```
+
+```codeBlockLines_e6Vv
+import { MorphCloudClient } from 'morphcloud';
+
+const client = new MorphCloudClient();
+
+async function executeCommand() {
+  const instanceId = "morphvm_abc123"; // Replace with a valid instance ID
+  const instance = await client.instances.get({ instanceId: instanceId });
+
+  const result = await instance.exec("uname -a");
+
+  console.log(`Exit Code: ${result.exitCode}`);
+  console.log(`Stdout:\n${result.stdout}`);
+  console.log(`Stderr:\n${result.stderr}`);
+}
+
+executeCommand();
+
+```
+
+```codeBlockLines_e6Vv
+# Execute a command on an instance
+morphcloud instance exec morphvm_abc123 uname -a
+
+# For commands with spaces or multiple arguments
+morphcloud instance exec morphvm_abc123 bash -c "ls -la /tmp && echo 'Hello World'"
+
+```
+
+## Execute Multiple Commands [​](https://cloud.morph.so/docs/documentation/instances/command-execution\#execute-multiple-commands "Direct link to 
+Execute Multiple Commands")
+
+You can also run a sequence of commands in a single execution.
+
+- Python
+- TypeScript
+- CLI
+
+```codeBlockLines_e6Vv
+from morphcloud.api import MorphCloudClient
+
+client = MorphCloudClient()
+
+instance_id = "morphvm_abc123" # Replace with a valid instance ID
+instance = client.instances.get(instance_id=instance_id)
+
+commands = """
+apt-get update
+apt-get install -y nginx
+systemctl enable nginx
+systemctl start nginx
+"""
+
+result = instance.exec(command=commands)
+
+print(f"Exit Code: {result.exit_code}")
+print(f"Stdout:\n{result.stdout}")
+print(f"Stderr:\n{result.stderr}")
+
+```
+
+```codeBlockLines_e6Vv
+import { MorphCloudClient } from 'morphcloud';
+
+const client = new MorphCloudClient();
+
+async function executeMultipleCommands() {
+  const instanceId = "morphvm_abc123"; // Replace with a valid instance ID
+  const instance = await client.instances.get({ instanceId: instanceId });
+
+  const commands = `
+apt-get update
+apt-get install -y nginx
+systemctl enable nginx
+systemctl start nginx
+`;
+
+  const result = await instance.exec(commands);
+
+  console.log(`Exit Code: ${result.exitCode}`);
+  console.log(`Stdout:\n${result.stdout}`);
+  console.log(`Stderr:\n${result.stderr}`);
+}
+
+executeMultipleCommands();
+
+```
+
+```codeBlockLines_e6Vv
+# Execute multiple commands
+morphcloud instance exec morphvm_abc123 bash -c "apt-get update && apt-get install -y nginx && systemctl enable nginx && systemctl start nginx"
+
+```
+
+## Handling Execution Results [​](https://cloud.morph.so/docs/documentation/instances/command-execution\#handling-execution-results "Direct link t
+o Handling Execution Results")
+
+Command execution results contain stdout, stderr, and an exit code that you can use to determine success or failure:
+
+- Python
+- TypeScript
+
+```codeBlockLines_e6Vv
+from morphcloud.api import MorphCloudClient
+
+client = MorphCloudClient()
+
+instance_id = "morphvm_abc123" # Replace with a valid instance ID
+instance = client.instances.get(instance_id=instance_id)
+
+result = instance.exec(command="ls /nonexistent")
+
+if result.exit_code == 0:
+    print("Command succeeded")
+    print(f"Output: {result.stdout}")
+else:
+    print("Command failed")
+    print(f"Error: {result.stderr}")
+    print(f"Exit code: {result.exit_code}")
+
+```
+
+```codeBlockLines_e6Vv
+import { MorphCloudClient } from 'morphcloud';
+
+const client = new MorphCloudClient();
+
+async function handleExecutionResults() {
+  const instanceId = "morphvm_abc123"; // Replace with a valid instance ID
+  const instance = await client.instances.get({ instanceId: instanceId });
+
+  const result = await instance.exec("ls /nonexistent");
+
+  if (result.exitCode === 0) {
+    console.log("Command succeeded");
+    console.log(`Output: ${result.stdout}`);
+  } else {
+    console.log("Command failed");
+    console.log(`Error: ${result.stderr}`);
+    console.log(`Exit code: ${result.exitCode}`);
+  }
+}
+
+handleExecutionResults();
+
+```
+
+- [Execute Commands on Instance](https://cloud.morph.so/docs/documentation/instances/command-execution#execute-commands-on-instance)
+- [Execute Multiple Commands](https://cloud.morph.so/docs/documentation/instances/command-execution#execute-multiple-commands)
+- [Handling Execution Results](https://cloud.morph.so/docs/documentation/instances/command-execution#handling-execution-results)

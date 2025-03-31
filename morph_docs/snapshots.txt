@@ -1,0 +1,195 @@
+[Skip to main content](https://cloud.morph.so/docs/documentation/instances/creating-snapshot#__docusaurus_skipToContent_fallback)
+
+On this page
+
+Snapshots are immutable point-in-time copies of both memory and disk state. They serve as templates for creating instances. When you create a sna
+pshot, it captures the complete state of a running instance, including all running processes and services.
+
+## Create a New Snapshot [​](https://cloud.morph.so/docs/documentation/instances/creating-snapshot\#create-a-new-snapshot "Direct link to Create a
+ New Snapshot")
+
+To create a new snapshot, specify the resource specifications like `vcpus`, `memory`, and `disk_size`. You can optionally include a `digest`. The
+ API will use our default image `morphvm-minimal` automatically.
+
+- Python
+- TypeScript
+- CLI
+
+```codeBlockLines_e6Vv
+from morphcloud.api import MorphCloudClient
+
+client = MorphCloudClient()
+
+new_snapshot = client.snapshots.create(
+    vcpus=2,
+    memory=4096, # MB
+    disk_size=50000, # MB
+    digest="digest" # Optional
+)
+
+print(f"Snapshot created with ID: {new_snapshot.id}")
+
+```
+
+```codeBlockLines_e6Vv
+import { MorphCloudClient } from 'morphcloud';
+
+const client = new MorphCloudClient();
+
+async function createSnapshot() {
+  const newSnapshot = await client.snapshots.create({
+    vcpus: 2,
+    memory: 4096, // MB
+    diskSize: 50000, // MB
+    digest: "digest", // Optional
+  });
+
+  console.log(`Snapshot created with ID: ${newSnapshot.id}`);
+}
+
+createSnapshot();
+
+```
+
+```codeBlockLines_e6Vv
+# Create a new snapshot
+morphcloud snapshot create --vcpus 2 --memory 4096 --disk-size 50000 --digest digest
+
+```
+
+## List Snapshots [​](https://cloud.morph.so/docs/documentation/instances/creating-snapshot\#list-snapshots "Direct link to List Snapshots")
+
+You can retrieve a list of all snapshots in your Morph Cloud account.
+
+- Python
+- TypeScript
+- CLI
+
+```codeBlockLines_e6Vv
+from morphcloud.api import MorphCloudClient
+
+client = MorphCloudClient()
+
+# List all snapshots
+snapshots = client.snapshots.list()
+
+for snapshot in snapshots:
+    print(f"ID: {snapshot.id}, Created At: {snapshot.created}")
+
+```
+
+```codeBlockLines_e6Vv
+import { MorphCloudClient } from 'morphcloud';
+
+const client = new MorphCloudClient();
+
+async function listSnapshots() {
+  // List all snapshots
+  const snapshots = await client.snapshots.list();
+  snapshots.forEach(snapshot => {
+    console.log(`ID: ${snapshot.id}, Created At: ${snapshot.created}`);
+  });
+}
+
+listSnapshots();
+
+```
+
+```codeBlockLines_e6Vv
+# List all snapshots
+morphcloud snapshot list
+
+```
+
+## Get Snapshot Details [​](https://cloud.morph.so/docs/documentation/instances/creating-snapshot\#get-snapshot-details "Direct link to Get Snapsh
+ot Details")
+
+To get detailed information about a specific snapshot, use its ID.
+
+- Python
+- TypeScript
+- CLI
+
+```codeBlockLines_e6Vv
+from morphcloud.api import MorphCloudClient
+
+client = MorphCloudClient()
+
+snapshot_id = "snapshot_abc123"
+snapshot = client.snapshots.get(snapshot_id=snapshot_id)
+
+print(f"Snapshot ID: {snapshot.id}")
+print(f"Created At: {snapshot.created}")
+
+```
+
+```codeBlockLines_e6Vv
+import { MorphCloudClient } from 'morphcloud';
+
+const client = new MorphCloudClient();
+
+async function getSnapshotDetails() {
+  const snapshotId = "snapshot_abc123";
+  const snapshot = await client.snapshots.get({ snapshotId: snapshotId });
+
+  console.log(`Snapshot ID: ${snapshot.id}`);
+  console.log(`Created At: ${snapshot.created}`);
+}
+
+getSnapshotDetails();
+
+```
+
+```codeBlockLines_e6Vv
+# Get snapshot details
+morphcloud snapshot get snapshot_abc123
+
+```
+
+## Delete a Snapshot [​](https://cloud.morph.so/docs/documentation/instances/creating-snapshot\#delete-a-snapshot "Direct link to Delete a Snapsho
+t")
+
+When you no longer need a snapshot, you can delete it.
+
+- Python
+- TypeScript
+- CLI
+
+```codeBlockLines_e6Vv
+from morphcloud.api import MorphCloudClient
+
+client = MorphCloudClient()
+
+snapshot_id = "snapshot_abc123"
+client.snapshots.delete(snapshot_id=snapshot_id)
+
+print(f"Snapshot {snapshot_id} has been deleted")
+
+```
+
+```codeBlockLines_e6Vv
+import { MorphCloudClient } from 'morphcloud';
+
+const client = new MorphCloudClient();
+
+async function deleteSnapshot() {
+  const snapshotId = "snapshot_abc123";
+  await client.snapshots.delete({ snapshotId: snapshotId });
+
+  console.log(`Snapshot ${snapshotId} has been deleted`);
+}
+
+deleteSnapshot();
+
+```
+
+```codeBlockLines_e6Vv
+# Delete a snapshot
+morphcloud snapshot delete snapshot_abc123
+
+```
+
+- [Create a New Snapshot](https://cloud.morph.so/docs/documentation/instances/creating-snapshot#create-a-new-snapshot)
+- [List Snapshots](https://cloud.morph.so/docs/documentation/instances/creating-snapshot#list-snapshots)
+- [Get Snapshot Details](https://cloud.morph.so/docs/documentation/instances/creating-snapshot#get-snapshot-details)
+- [Delete a Snapshot](https://cloud.morph.so/docs/documentation/instances/creating-snapshot#delete-a-snapshot)

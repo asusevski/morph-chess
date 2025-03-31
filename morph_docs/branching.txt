@@ -1,0 +1,81 @@
+[Skip to main content](https://cloud.morph.so/docs/documentation/instances/branch#__docusaurus_skipToContent_fallback)
+
+On this page
+
+Branching creates a snapshot of an instance and then launches a specified number of new instances from that snapshot. This is particularly useful
+ for scenarios where you need multiple identical environments, like parallel testing, training multiple machine learning models, or preparing env
+ironments for a team.
+
+## Creating Multiple Clones [​](https://cloud.morph.so/docs/documentation/instances/branch\#creating-multiple-clones "Direct link to Creating Mult
+iple Clones")
+
+Branching an instance creates multiple clone instances based on the current state of the original instance.
+
+- Python
+- TypeScript
+- CLI
+
+```codeBlockLines_e6Vv
+from morphcloud.api import MorphCloudClient
+
+client = MorphCloudClient()
+
+instance_id = "morphvm_abc123" # Replace with a valid instance ID
+instance = client.instances.get(instance_id=instance_id)
+
+snapshot, clones = instance.branch(count=3)
+
+print(f"Snapshot created: {snapshot.id}")
+print("Cloned instances:")
+for clone in clones:
+    print(f"  - {clone.id}")
+
+```
+
+```codeBlockLines_e6Vv
+import { MorphCloudClient } from 'morphcloud';
+
+const client = new MorphCloudClient();
+
+async function branchInstance() {
+  const instanceId = "morphvm_abc123"; // Replace with a valid instance ID
+  const instance = await client.instances.get({ instanceId: instanceId });
+
+  // Create 3 branches from original instance
+  const level1Result = await instance.branch(3);
+
+  // Optional: Create branches from one of the clones
+  if (level1Result.instances.length > 0) {
+    const level2Result = await level1Result.instances[0].branch(2);
+    console.log(`Created ${level2Result.instances.length} level 2 instances`);
+  }
+}
+
+branchInstance();
+
+```
+
+```codeBlockLines_e6Vv
+# Branch an instance to create 3 clones
+morphcloud instance branch morphvm_abc123 --count 3
+
+```
+
+## Use Cases for Branching [​](https://cloud.morph.so/docs/documentation/instances/branch\#use-cases-for-branching "Direct link to Use Cases for B
+ranching")
+
+Branching is particularly useful in the following scenarios:
+
+1. **Parallelized Testing**: Create multiple identical environments to run different test suites in parallel.
+
+2. **Machine Learning Training**: Branch a prepared environment to train multiple models with different parameters.
+
+3. **Team Development**: Create identical environments for each team member from a pre-configured instance.
+
+4. **A/B Deployment Testing**: Run the same application with different configurations to test performance or behavior.
+
+5. **Batch Processing**: Process different data chunks in parallel with identical processing environments.
+
+
+- [Creating Multiple Clones](https://cloud.morph.so/docs/documentation/instances/branch#creating-multiple-clones)
+- [Use Cases for Branching](https://cloud.morph.so/docs/documentation/instances/branch#use-cases-for-branching)
