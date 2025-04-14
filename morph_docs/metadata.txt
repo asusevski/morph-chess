@@ -1,0 +1,276 @@
+[Skip to main content](https://cloud.morph.so/docs/documentation/instances/metadata#__docusaurus_skipToContent_fallback)
+
+On this page
+
+Morph Cloud allows you to attach metadata to both snapshots and instances after they've been created. Metadata is stored as key-value pairs and c
+an be used for:
+
+- Organization and categorization
+- Filtering resources
+- Storing application-specific information
+- Tracking deployment environments
+- And more
+
+## Setting and Updating Metadata [​](https://cloud.morph.so/docs/documentation/instances/metadata\#setting-and-updating-metadata "Direct link to S
+etting and Updating Metadata")
+
+### For Instances [​](https://cloud.morph.so/docs/documentation/instances/metadata\#for-instances "Direct link to For Instances")
+
+You can add or update metadata for running instances at any time.
+
+- Python
+- TypeScript
+- CLI
+
+```codeBlockLines_e6Vv
+from morphcloud.api import MorphCloudClient
+
+client = MorphCloudClient()
+
+# Get an instance
+instance_id = "morphvm_abc123" # Replace with a valid instance ID
+instance = client.instances.get(instance_id=instance_id)
+
+# Set or update metadata
+instance.set_metadata({
+    "environment": "production",
+    "region": "us-east-1",
+    "service": "web-frontend",
+    "team": "frontend"
+})
+
+print(f"Instance metadata updated: {instance.metadata}")
+
+```
+
+```codeBlockLines_e6Vv
+import { MorphCloudClient } from 'morphcloud';
+
+const client = new MorphCloudClient();
+
+async function setInstanceMetadata() {
+  // Get an instance
+  const instanceId = "morphvm_abc123"; // Replace with a valid instance ID
+  const instance = await client.instances.get({ instanceId: instanceId });
+
+  // Set or update metadata
+  await instance.setMetadata({
+    environment: "production",
+    region: "us-east-1",
+    service: "web-frontend",
+    team: "frontend"
+  });
+
+  console.log(`Instance metadata updated: ${JSON.stringify(instance.metadata)}`);
+}
+
+setInstanceMetadata();
+
+```
+
+```codeBlockLines_e6Vv
+# Set metadata for an instance
+morphcloud instance set-metadata morphvm_abc123 environment=production region=us-east-1 service=web-frontend team=frontend
+
+```
+
+### For Snapshots [​](https://cloud.morph.so/docs/documentation/instances/metadata\#for-snapshots "Direct link to For Snapshots")
+
+You can add or update metadata for existing snapshots.
+
+- Python
+- TypeScript
+- CLI
+
+```codeBlockLines_e6Vv
+from morphcloud.api import MorphCloudClient
+
+client = MorphCloudClient()
+
+# Update metadata for an existing snapshot
+snapshot_id = "snapshot_abc123" # Replace with a valid snapshot ID
+snapshot = client.snapshots.get(snapshot_id=snapshot_id)
+snapshot.set_metadata({
+    "environment": "production",
+    "version": "1.1.0"
+})
+
+print(f"Snapshot metadata: {snapshot.metadata}")
+
+```
+
+```codeBlockLines_e6Vv
+import { MorphCloudClient } from 'morphcloud';
+
+const client = new MorphCloudClient();
+
+async function setSnapshotMetadata() {
+  const snapshotId = "snapshot_abc123"; // Replace with a valid snapshot ID
+  const snapshot = await client.snapshots.get({ snapshotId: snapshotId });
+  await snapshot.setMetadata({
+    environment: "production",
+    version: "1.1.0"
+  });
+
+  console.log(`Snapshot metadata: ${JSON.stringify(snapshot.metadata)}`);
+}
+
+setSnapshotMetadata();
+
+```
+
+```codeBlockLines_e6Vv
+# Set metadata for a snapshot
+morphcloud snapshot set-metadata snapshot_abc123 environment=production version=1.1.0
+
+```
+
+## Filtering Resources by Metadata [​](https://cloud.morph.so/docs/documentation/instances/metadata\#filtering-resources-by-metadata "Direct link 
+to Filtering Resources by Metadata")
+
+Metadata enables powerful filtering of both instances and snapshots.
+
+### Filtering Instances [​](https://cloud.morph.so/docs/documentation/instances/metadata\#filtering-instances "Direct link to Filtering Instances"
+)
+
+- Python
+- TypeScript
+- CLI
+
+```codeBlockLines_e6Vv
+from morphcloud.api import MorphCloudClient
+
+client = MorphCloudClient()
+
+# Find production instances
+prod_instances = client.instances.list(metadata={"environment": "production"})
+
+print(f"Found {len(prod_instances)} production instances")
+
+# Find instances by team and service
+team_instances = client.instances.list(metadata={"team": "frontend", "service": "web-frontend"})
+
+print(f"Found {len(team_instances)} frontend web instances")
+for instance in team_instances:
+    print(f"ID: {instance.id}, Status: {instance.status}, Metadata: {instance.metadata}")
+
+```
+
+```codeBlockLines_e6Vv
+import { MorphCloudClient } from 'morphcloud';
+
+const client = new MorphCloudClient();
+
+async function filterInstancesByMetadata() {
+  // Find production instances
+  const prodInstances = await client.instances.list({
+    metadata: { environment: "production" }
+  });
+
+  console.log(`Found ${prodInstances.length} production instances`);
+
+  // Find instances by team and service
+  const teamInstances = await client.instances.list({
+    metadata: { team: "frontend", service: "web-frontend" }
+  });
+
+  console.log(`Found ${teamInstances.length} frontend web instances`);
+  teamInstances.forEach(instance => {
+    console.log(`ID: ${instance.id}, Status: ${instance.status}, Metadata: ${JSON.stringify(instance.metadata)}`);
+  });
+}
+
+filterInstancesByMetadata();
+
+```
+
+```codeBlockLines_e6Vv
+# List instances with specific metadata
+morphcloud instance list --metadata environment=production
+
+# List instances with multiple metadata filters
+morphcloud instance list --metadata team=frontend service=web-frontend
+
+```
+
+### Filtering Snapshots [​](https://cloud.morph.so/docs/documentation/instances/metadata\#filtering-snapshots "Direct link to Filtering Snapshots"
+)
+
+- Python
+- TypeScript
+- CLI
+
+```codeBlockLines_e6Vv
+from morphcloud.api import MorphCloudClient
+
+client = MorphCloudClient()
+
+# Get snapshots with specific metadata
+dev_snapshots = client.snapshots.list(metadata={"environment": "development"})
+
+print(f"Found {len(dev_snapshots)} development snapshots")
+for snapshot in dev_snapshots:
+    print(f"ID: {snapshot.id}, Metadata: {snapshot.metadata}")
+
+```
+
+```codeBlockLines_e6Vv
+import { MorphCloudClient } from 'morphcloud';
+
+const client = new MorphCloudClient();
+
+async function filterSnapshotsByMetadata() {
+  // Get snapshots with specific metadata
+  const devSnapshots = await client.snapshots.list({
+    metadata: { environment: "development" }
+  });
+
+  console.log(`Found ${devSnapshots.length} development snapshots`);
+  devSnapshots.forEach(snapshot => {
+    console.log(`ID: ${snapshot.id}, Metadata: ${JSON.stringify(snapshot.metadata)}`);
+  });
+}
+
+filterSnapshotsByMetadata();
+
+```
+
+```codeBlockLines_e6Vv
+# List snapshots with specific metadata
+morphcloud snapshot list --metadata environment=development
+
+```
+
+## Best Practices for Metadata [​](https://cloud.morph.so/docs/documentation/instances/metadata\#best-practices-for-metadata "Direct link to Best 
+Practices for Metadata")
+
+Here are some recommended best practices for using metadata effectively:
+
+1. **Use consistent keys**: Establish a convention for metadata key names and stick to it
+2. **Keep values simple**: Use simple values for easier filtering
+3. **Categorize with purpose**: Use metadata to categorize resources by environment, team, service, version, etc.
+4. **Don't store secrets**: Avoid storing sensitive information in metadata
+5. **Update lifecycle stages**: Use metadata to track the lifecycle stage of resources
+
+## Common Metadata Use Cases [​](https://cloud.morph.so/docs/documentation/instances/metadata\#common-metadata-use-cases "Direct link to Common Me
+tadata Use Cases")
+
+Here are some common use cases for metadata:
+
+- **Environment tracking**: `environment=production`, `environment=staging`, `environment=development`
+- **Version tracking**: `version=1.0.0`, `version=2.3.4`
+- **Ownership**: `team=backend`, `owner=username`
+- **Purpose**: `purpose=database`, `purpose=web-server`
+- **Region or zone**: `region=us-east-1`, `zone=a`
+- **Creation info**: `created-by=deployment-script`, `created-at=2023-01-15`
+
+By effectively using metadata, you can better organize, search, and manage your Morph Cloud resources.
+
+- [Setting and Updating Metadata](https://cloud.morph.so/docs/documentation/instances/metadata#setting-and-updating-metadata)
+  - [For Instances](https://cloud.morph.so/docs/documentation/instances/metadata#for-instances)
+  - [For Snapshots](https://cloud.morph.so/docs/documentation/instances/metadata#for-snapshots)
+- [Filtering Resources by Metadata](https://cloud.morph.so/docs/documentation/instances/metadata#filtering-resources-by-metadata)
+  - [Filtering Instances](https://cloud.morph.so/docs/documentation/instances/metadata#filtering-instances)
+  - [Filtering Snapshots](https://cloud.morph.so/docs/documentation/instances/metadata#filtering-snapshots)
+- [Best Practices for Metadata](https://cloud.morph.so/docs/documentation/instances/metadata#best-practices-for-metadata)
+- [Common Metadata Use Cases](https://cloud.morph.so/docs/documentation/instances/metadata#common-metadata-use-cases)

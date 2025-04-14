@@ -1,0 +1,373 @@
+[Skip to main content](https://cloud.morph.so/docs/documentation/instances/ssh#__docusaurus_skipToContent_fallback)
+
+On this page
+
+SSH (Secure Shell) provides secure access to your Morph Cloud instances for interactive sessions, command execution, and file transfers.
+
+## Direct SSH Access [​](https://cloud.morph.so/docs/documentation/instances/ssh\#direct-ssh-access "Direct link to Direct SSH Access")
+
+You can directly SSH into any MorphVM instance using standard SSH clients with your public key:
+
+```codeBlockLines_e6Vv
+ssh <morphvm>@ssh.cloud.morph.so
+
+```
+
+This method works just like SSHing into any other VM. Your SSH public key must be registered with Morph Cloud first. This is the same as using th
+e SDK or CLI methods described below, but gives you the flexibility of using your preferred SSH client directly.
+
+## SSH into Instance [​](https://cloud.morph.so/docs/documentation/instances/ssh\#ssh-into-instance "Direct link to SSH into Instance")
+
+You can establish an SSH connection to your running instance for interactive shell access or to execute scripts.
+
+- Python
+- TypeScript
+- CLI
+
+```codeBlockLines_e6Vv
+from morphcloud.api import MorphCloudClient
+
+client = MorphCloudClient()
+instance_id = "morphvm_abc123" # Replace with a valid instance ID
+instance = client.instances.get(instance_id=instance_id)
+
+instance.wait_until_ready() # Ensure instance is ready for SSH
+
+with instance.ssh() as ssh_client:
+    # Run a command
+    result = ssh_client.run("ls -l /home")
+    print(f"Stdout:\n{result.stdout}")
+
+    # Start an interactive shell (for interactive sessions, not recommended in scripts)
+    # ssh_client.interactive_shell()
+
+```
+
+```codeBlockLines_e6Vv
+import { MorphCloudClient } from 'morphcloud';
+
+const client = new MorphCloudClient();
+
+async function sshAccess() {
+  const instanceId = "morphvm_abc123"; // Replace with a valid instance ID
+  const instance = await client.instances.get({ instanceId: instanceId });
+
+  await instance.waitUntilReady(); // Ensure instance is ready for SSH
+
+  const sshClient = await instance.ssh();
+  try {
+    // Run a command
+    const result = await sshClient.execCommand("ls -l /home");
+    console.log(`Stdout:\n${result.stdout}`);
+
+    // For interactive shell in TypeScript, consider using a library that wraps NodeSSH to provide a more shell-like experience if needed for you
+r application.
+    // NodeSSH's `interactiveShell` is primarily for basic interaction.
+  } finally {
+    sshClient.dispose(); // Important to close the SSH connection
+  }
+}
+
+sshAccess();
+
+```
+
+```codeBlockLines_e6Vv
+# SSH directly into the instance
+morphcloud instance ssh morphvm_abc123
+
+# Execute a command directly via SSH without interactive login
+morphcloud instance ssh morphvm_acb123 "ls -la /tmp"
+
+```
+
+## Interactive vs Non-Interactive Sessions [​](https://cloud.morph.so/docs/documentation/instances/ssh\#interactive-vs-non-interactive-sessions "D
+irect link to Interactive vs Non-Interactive Sessions")
+
+SSH supports both interactive and non-interactive sessions:
+
+### Interactive Sessions [​](https://cloud.morph.so/docs/documentation/instances/ssh\#interactive-sessions "Direct link to Interactive Sessions")
+
+Interactive sessions provide a full shell environment where you can run commands interactively.
+
+- Python
+- CLI
+
+```codeBlockLines_e6Vv
+from morphcloud.api import MorphCloudClient
+
+client = MorphCloudClient()
+instance_id = "morphvm_abc123" # Replace with a valid instance ID
+instance = client.instances.get(instance_id=instance_id)
+
+with instance.ssh() as ssh_client:
+    # Start an interactive shell
+    ssh_client.interactive_shell()
+
+```
+
+```codeBlockLines_e6Vv
+# Start an interactive SSH session
+morphcloud instance ssh morphvm_abc123
+
+```
+
+### Non-Interactive Sessions [​](https://cloud.morph.so/docs/documentation/instances/ssh\#non-interactive-sessions "Direct link to Non-Interactive
+ Sessions")
+
+Non-interactive sessions are useful for running specific commands or scripts without user interaction.
+
+- Python
+- TypeScript
+- CLI
+
+```codeBlockLines_e6Vv
+from morphcloud.api import MorphCloudClient
+
+client = MorphCloudClient()
+instance_id = "morphvm_abc123" # Replace with a valid instance ID
+instance = client.instances.get(instance_id=instance_id)
+
+with instance.ssh() as ssh_client:
+    # Run a specific command
+    result = ssh_client.run("uname -a")
+    print(f"Stdout: {result.stdout}")
+
+    # Run a script with multiple commands
+    commands = [\
+        "cd /tmp",\
+        "mkdir -p test_dir",\
+        "echo 'Hello World' > test_dir/hello.txt",\
+        "cat test_dir/hello.txt"\
+    ]
+
+    result = ssh_client.run("; ".join(commands))
+    print(f"Script output: {result.stdout}")
+
+```
+
+```codeBlockLines_e6Vv
+import { MorphCloudClient } from 'morphcloud';
+
+const client = new MorphCloudClient();
+
+async function sshCommands() {
+  const instanceId = "morphvm_abc123"; // Replace with a valid instance ID
+  const instance = await client.instances.get({ instanceId: instanceId });
+
+  const sshClient = await instance.ssh();
+  try {
+    // Run a specific command
+    const result = await sshClient.execCommand("uname -a");
+    console.log(`Stdout: ${result.stdout}`);
+
+    // Run a script with multiple commands
+    const commands = [\
+      "cd /tmp",\
+      "mkdir -p test_dir",\
+      "echo 'Hello World' > test_dir/hello.txt",\
+      "cat test_dir/hello.txt"\
+    ].join("; ");
+
+    const scriptResult = await sshClient.execCommand(commands);
+    console.log(`Script output: ${scriptResult.stdout}`);
+  } finally {
+    sshClient.dispose();
+  }
+}
+
+sshCommands();
+
+```
+
+```codeBlockLines_e6Vv
+# Run a specific command
+morphcloud instance ssh morphvm_abc123 "uname -a"
+
+# Run multiple commands
+morphcloud instance ssh morphvm_abc123 "cd /tmp; mkdir -p test_dir; echo 'Hello World' > test_dir/hello.txt; cat test_dir/hello.txt"
+
+```
+
+You're right - let's rewrite the File Transfer section to match the actual implementations:
+
+## File Transfer (SFTP) [​](https://cloud.morph.so/docs/documentation/instances/ssh\#file-transfer-sftp "Direct link to File Transfer (SFTP)")
+
+SSH enables secure file transfers between your local machine and Morph instances using SFTP.
+
+- Python
+- TypeScript
+- CLI
+
+```codeBlockLines_e6Vv
+from morphcloud.api import MorphCloudClient
+
+client = MorphCloudClient()
+instance = client.instances.get("morphvm_abc123")
+
+with instance.ssh() as ssh:
+    # Get SFTP client
+    sftp = ssh._client.open_sftp()
+    try:
+        # Upload a file
+        sftp.put("/local/path/file.txt", "/remote/path/file.txt")
+
+        # Download a file
+        sftp.get("/remote/path/file.txt", "/local/path/file.txt")
+
+        # Upload directory recursively
+        def upload_dir(local_path, remote_path):
+            sftp.mkdir(remote_path)
+            for item in os.listdir(local_path):
+                local_item = os.path.join(local_path, item)
+                remote_item = f"{remote_path}/{item}"
+                if os.path.isfile(local_item):
+                    sftp.put(local_item, remote_item)
+                else:
+                    upload_dir(local_item, remote_item)
+
+        upload_dir("/local/dir", "/remote/dir")
+
+        # Download directory recursively
+        def download_dir(remote_path, local_path):
+            os.makedirs(local_path, exist_ok=True)
+            for item in sftp.listdir_attr(remote_path):
+                remote_item = f"{remote_path}/{item.filename}"
+                local_item = os.path.join(local_path, item.filename)
+                if stat.S_ISREG(item.st_mode):
+                    sftp.get(remote_item, local_item)
+                elif stat.S_ISDIR(item.st_mode):
+                    download_dir(remote_item, local_item)
+
+        download_dir("/remote/dir", "/local/dir")
+
+    finally:
+        sftp.close()
+
+```
+
+```codeBlockLines_e6Vv
+import { MorphCloudClient } from 'morphcloud';
+import * as fs from 'fs/promises';
+import * as path from 'path';
+import * as stat from 'fs';
+
+const client = new MorphCloudClient();
+
+async function transferFiles() {
+    const instance = await client.instances.get({ instanceId: "morphvm_abc123" });
+    const ssh = await instance.ssh();
+
+    try {
+        const sftp = await ssh.requestSFTP();
+
+        // Upload a file
+        await sftp.fastPut("/local/path/file.txt", "/remote/path/file.txt");
+
+        // Download a file
+        await sftp.fastGet("/remote/path/file.txt", "/local/path/file.txt");
+
+        // Helper to create remote directories recursively
+        async function makeRemoteDirs(sftp: any, dir: string) {
+            if (!dir || dir === '/') return;
+            try {
+                await sftp.stat(dir);
+            } catch (error) {
+                await makeRemoteDirs(sftp, path.dirname(dir));
+                try {
+                    await sftp.mkdir(dir);
+                } catch (error) {
+                    // Ignore if directory exists
+                }
+            }
+        }
+
+        // Upload directory recursively
+        async function uploadDir(localPath: string, remotePath: string) {
+            await makeRemoteDirs(sftp, remotePath);
+            const items = await fs.readdir(localPath, { withFileTypes: true });
+
+            for (const item of items) {
+                const localItem = path.join(localPath, item.name);
+                const remoteItem = `${remotePath}/${item.name}`;
+
+                if (item.isDirectory()) {
+                    await uploadDir(localItem, remoteItem);
+                } else {
+                    await sftp.fastPut(localItem, remoteItem);
+                }
+            }
+        }
+
+        // Download directory recursively
+        async function downloadDir(remotePath: string, localPath: string) {
+            await fs.mkdir(localPath, { recursive: true });
+            const items = await sftp.readdir(remotePath);
+
+            for (const item of items) {
+                const remoteItem = `${remotePath}/${item.filename}`;
+                const localItem = path.join(localPath, item.filename);
+
+                if (stat.S_ISDIR(item.attrs.mode)) {
+                    await downloadDir(remoteItem, localItem);
+                } else {
+                    await sftp.fastGet(remoteItem, localItem);
+                }
+            }
+        }
+
+        // Example usage:
+        await uploadDir("/local/dir", "/remote/dir");
+        await downloadDir("/remote/dir", "/local/dir");
+
+    } finally {
+        ssh.dispose();
+    }
+}
+
+```
+
+```codeBlockLines_e6Vv
+# Copy a single file to instance
+morphcloud instance copy ./local/file.txt morphvm_abc123:/remote/path/file.txt
+
+# Copy a single file from instance
+morphcloud instance copy morphvm_abc123:/remote/path/file.txt ./local/file.txt
+
+# Copy directory to instance recursively
+morphcloud instance copy -r ./local/dir/ morphvm_abc123:/remote/dir/
+
+# Copy directory from instance recursively
+morphcloud instance copy -r morphvm_abc123:/remote/dir/ ./local/dir/
+
+```
+
+Notes:
+
+- The CLI's `copy` command provides better progress indication and error handling than manual SFTP operations
+- Both source and destination paths use the format `instance_id:/path` for remote paths
+- When copying to an instance without specifying a full path, files go to the user's home directory
+- The `-r` or `--recursive` flag is required for directory copies
+
+## Port Forwarding [​](https://cloud.morph.so/docs/documentation/instances/ssh\#port-forwarding "Direct link to Port Forwarding")
+
+You can forward ports from your instance to your local machine:
+
+- CLI
+
+```codeBlockLines_e6Vv
+# Forward remote port 8080 to local port 8080
+morphcloud instance port-forward instance_your_instance_id 8080
+
+# Forward remote port 8080 to local port 9000
+morphcloud instance port-forward instance_your_instance_id 8080 9000
+
+```
+
+- [Direct SSH Access](https://cloud.morph.so/docs/documentation/instances/ssh#direct-ssh-access)
+- [SSH into Instance](https://cloud.morph.so/docs/documentation/instances/ssh#ssh-into-instance)
+- [Interactive vs Non-Interactive Sessions](https://cloud.morph.so/docs/documentation/instances/ssh#interactive-vs-non-interactive-sessions)
+  - [Interactive Sessions](https://cloud.morph.so/docs/documentation/instances/ssh#interactive-sessions)
+  - [Non-Interactive Sessions](https://cloud.morph.so/docs/documentation/instances/ssh#non-interactive-sessions)
+- [File Transfer (SFTP)](https://cloud.morph.so/docs/documentation/instances/ssh#file-transfer-sftp)
+- [Port Forwarding](https://cloud.morph.so/docs/documentation/instances/ssh#port-forwarding)

@@ -1,0 +1,15 @@
+llm:
+  provider: "openai"
+  model_id: "gpt-4o"
+  api_key_env: "OPENAI_API_KEY"
+  max_tokens: 100
+
+# llm:
+  # provider: "hf-inference"
+  # model_id: "meta-llama/Llama-3.3-70B-Instruct"
+  # api_key_env: "HF_API_KEY"
+  # max_tokens: 100
+
+chess:
+  max_moves: 2
+  autosave: true

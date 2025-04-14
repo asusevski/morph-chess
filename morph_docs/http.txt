@@ -1,0 +1,333 @@
+[Skip to main content](https://cloud.morph.so/docs/documentation/instances/http-services#__docusaurus_skipToContent_fallback)
+
+On this page
+
+Morph Cloud allows you to expose HTTP services running within your instances to the public internet. This makes it easy to share web applications
+, APIs, or any service running on an HTTP port.
+
+> **Note:** When you create a snapshot from an instance with running HTTP services, those services will continue to run when new instances are st
+arted from that snapshot. This is because snapshots preserve both memory and disk state, including all running processes.
+
+## Expose an HTTP Service [​](https://cloud.morph.so/docs/documentation/instances/http-services\#expose-an-http-service "Direct link to Expose an 
+HTTP Service")
+
+To make an HTTP service accessible publicly, you can use the `expose_http_service` method. You need to specify a service `name` and the `port` th
+e service is listening on inside the instance.
+
+- Python
+- TypeScript
+- CLI
+
+```codeBlockLines_e6Vv
+service_url = instance.expose_http_service(name="my-service", port=8080)
+print(f"HTTP Service exposed at: {service_url}")
+
+```
+
+```codeBlockLines_e6Vv
+const serviceUrl = await instance.exposeHttpService("my-service", 8080);
+console.log(`HTTP Service exposed at: ${serviceUrl}`);
+
+```
+
+```codeBlockLines_e6Vv
+morphcloud instance expose-http morphvm_abc123 my-service 8080
+
+```
+
+## Secure HTTP Service with API Key Authentication [​](https://cloud.morph.so/docs/documentation/instances/http-services\#secure-http-service-with
+-api-key-authentication "Direct link to Secure HTTP Service with API Key Authentication")
+
+You can enable API key authentication for your exposed services for enhanced security.
+
+- Python
+- TypeScript
+- CLI
+
+```codeBlockLines_e6Vv
+service_url = instance.expose_http_service(name="secure-service", port=8081, auth_mode="api_key")
+
+```
+
+```codeBlockLines_e6Vv
+const serviceUrl = await instance.exposeHttpService("secure-service", 8081, "api_key");
+
+```
+
+```codeBlockLines_e6Vv
+morphcloud instance expose-http $INSTANCE_ID secure-service 8081 --auth-mode api_key
+
+```
+
+When `auth_mode="api_key"` is enabled, requests to the service URL must include the `Authorization: Bearer YOUR_MORPH_API_KEY` header:
+
+- Python
+- TypeScript
+- Curl
+
+```codeBlockLines_e6Vv
+import requests
+
+headers = {"Authorization": f"Bearer {client.api_key}"}
+response = requests.get(service_url, headers=headers)
+
+```
+
+```codeBlockLines_e6Vv
+const response = await axios.get(serviceUrl, {
+  headers: { Authorization: `Bearer ${client.apiKey}` }
+});
+
+```
+
+```codeBlockLines_e6Vv
+curl -H "Authorization: Bearer $API_KEY" https://your-service-url.morphcloud.io
+
+```
+
+## Hide an HTTP Service [​](https://cloud.morph.so/docs/documentation/instances/http-services\#hide-an-http-service "Direct link to Hide an HTTP S
+ervice")
+
+To stop exposing an HTTP service, use the `hide_http_service` method.
+
+- Python
+- TypeScript
+- CLI
+
+```codeBlockLines_e6Vv
+instance.hide_http_service(name="my-service")
+
+```
+
+```codeBlockLines_e6Vv
+await instance.hideHttpService("my-service");
+
+```
+
+```codeBlockLines_e6Vv
+morphcloud instance hide-http morphvm_abc123 my-service
+
+```
+
+## List Exposed HTTP Services [​](https://cloud.morph.so/docs/documentation/instances/http-services\#list-exposed-http-services "Direct link to Li
+st Exposed HTTP Services")
+
+You can view all currently exposed HTTP services for an instance through the `networking.http_services` property.
+
+- Python
+- TypeScript
+- CLI
+
+```codeBlockLines_e6Vv
+# Access HTTP services through the networking property
+for service in instance.networking.http_services:
+    print(f"Service Name: {service.name}")
+    print(f"URL: {service.url}")
+    print(f"Internal Port: {service.port}")
+
+```
+
+```codeBlockLines_e6Vv
+// Access HTTP services through the networking property
+instance.networking.httpServices.forEach(service => {
+  console.log(`Service Name: ${service.name}`);
+  console.log(`URL: ${service.url}`);
+  console.log(`Internal Port: ${service.port}`);
+});
+
+```
+
+```codeBlockLines_e6Vv
+# List instance details including HTTP services
+morphcloud instance get morphvm_abc123
+
+# For a table view of instances and their HTTP services
+morphcloud instance list
+
+```
+
+The CLI commands will show HTTP services in the following formats:
+
+- `morphcloud instance get` shows detailed JSON output including all HTTP services
+- `morphcloud instance list` shows a table with a column for HTTP services in the format `name:port, name2:port2, for all active instances`
+
+## Complete Example: Authenticated HTTP Service [​](https://cloud.morph.so/docs/documentation/instances/http-services\#complete-example-authentica
+ted-http-service "Direct link to Complete Example: Authenticated HTTP Service")
+
+Here's a complete example showing how to set up an HTTP server, expose it with authentication, and make authenticated requests.
+
+- Python
+- TypeScript
+- CLI
+
+```codeBlockLines_e6Vv
+from morphcloud.api import MorphCloudClient
+import time
+import requests
+from http.server import HTTPServer, BaseHTTPRequestHandler
+
+# Start a simple HTTP server within the instance
+client = MorphCloudClient()
+instance_id = "morphvm_abc123"  # Replace with your instance ID
+instance = client.instances.get(instance_id=instance_id)
+
+# Create a simple HTTP server script
+server_script = """
+from http.server import HTTPServer, BaseHTTPRequestHandler
+
+class SimpleHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header('Content-type', 'text/html')
+        self.end_headers()
+        self.wfile.write(b'Hello from Morph Cloud!')
+
+server = HTTPServer(('0.0.0.0', 8081), SimpleHandler)
+print('Server started on port 8081')
+server.serve_forever()
+"""
+
+# Write the server script to the instance
+instance.exec("mkdir -p /app")
+instance.write_file("/app/server.py", server_script)
+
+# Start the server in the background
+instance.exec("cd /app && python3 server.py &")
+time.sleep(2)  # Give the server time to start
+
+# Expose the HTTP service with API key authentication
+service_url = instance.expose_http_service(name="secure-service", port=8081, auth_mode="api_key")
+print(f"Secure HTTP Service exposed at: {service_url}")
+
+# Make an authenticated request to the service
+headers = {"Authorization": f"Bearer {client.api_key}"}
+response = requests.get(service_url, headers=headers)
+print(f"Response: {response.status_code} {response.text}")
+
+# Clean up when done
+instance.hide_http_service(name="secure-service")
+print("Service hidden")
+
+```
+
+```codeBlockLines_e6Vv
+import { MorphCloudClient } from 'morphcloud';
+import axios from 'axios';
+
+async function runSecureHttpExample() {
+  const client = new MorphCloudClient();
+  const instanceId = "morphvm_abc123";  // Replace with your instance ID
+
+  try {
+    // Get the instance
+    const instance = await client.instances.get({ instanceId });
+
+    // Create a simple HTTP server script
+    const serverScript = `
+const http = require('http');
+
+const server = http.createServer((req, res) => {
+  res.statusCode = 200;
+  res.setHeader('Content-Type', 'text/plain');
+  res.end('Hello from Morph Cloud!');
+});
+
+server.listen(8081, '0.0.0.0', () => {
+  console.log('Server running on port 8081');
+});`;
+
+    // Write the server script to the instance
+    await instance.exec({ command: "mkdir -p /app" });
+    await instance.writeFile("/app/server.js", serverScript);
+
+    // Start the server in the background
+    await instance.exec({ command: "cd /app && node server.js &" });
+
+    // Give the server time to start
+    await new Promise(resolve => setTimeout(resolve, 2000));
+
+    // Expose the HTTP service with API key authentication
+    const serviceResult = await instance.exposeHttpService("secure-service", 8081, "api_key");
+
+    // Handle either string or object response format
+    const serviceUrl = typeof serviceResult === 'string'
+      ? serviceResult
+      : serviceResult.url;
+
+    console.log(`Service exposed at: ${serviceUrl}`);
+
+    // Make an authenticated request to the service
+    const response = await axios.get(serviceUrl, {
+      headers: { Authorization: `Bearer ${client.apiKey}` }
+    });
+
+    console.log(`Response: ${response.status} ${response.data}`);
+
+    // Clean up when done
+    await instance.hideHttpService("secure-service");
+    console.log("Service hidden");
+
+  } catch (error) {
+    console.error(`Error: ${error.message}`);
+  }
+}
+
+runSecureHttpExample();
+
+```
+
+```codeBlockLines_e6Vv
+# Set up your instance ID (replace with your actual instance ID)
+INSTANCE_ID="morphvm_abc123"
+
+# Create a directory for our server
+morphcloud instance exec $INSTANCE_ID "mkdir -p /app"
+
+# Create a simple HTTP server script
+cat << 'EOF' > server.py
+from http.server import HTTPServer, BaseHTTPRequestHandler
+
+class SimpleHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header('Content-type', 'text/html')
+        self.end_headers()
+        self.wfile.write(b'Hello from Morph Cloud!')
+
+server = HTTPServer(('0.0.0.0', 8081), SimpleHandler)
+print('Server started on port 8081')
+server.serve_forever()
+EOF
+
+# Upload the server script to the instance
+morphcloud instance upload $INSTANCE_ID server.py /app/server.py
+
+# Start the server in the background
+morphcloud instance exec $INSTANCE_ID "cd /app && python3 server.py &"
+
+# Give the server time to start
+sleep 2
+
+# Expose the HTTP service with API key authentication
+SERVICE_URL=$(morphcloud instance expose-http $INSTANCE_ID secure-service 8081 --auth-mode api_key)
+echo "Service exposed at: $SERVICE_URL"
+
+# Get your API key
+API_KEY=$(morphcloud config get api_key)
+
+# Make an authenticated request to the service
+curl -H "Authorization: Bearer $API_KEY" $SERVICE_URL
+
+# Clean up when done
+morphcloud instance hide-http $INSTANCE_ID secure-service
+echo "Service hidden"
+
+```
+
+- [Expose an HTTP Service](https://cloud.morph.so/docs/documentation/instances/http-services#expose-an-http-service)
+- [Secure HTTP Service with API Key Authentication](https://cloud.morph.so/docs/documentation/instances/http-services#secure-http-service-with-ap
+i-key-authentication)
+- [Hide an HTTP Service](https://cloud.morph.so/docs/documentation/instances/http-services#hide-an-http-service)
+- [List Exposed HTTP Services](https://cloud.morph.so/docs/documentation/instances/http-services#list-exposed-http-services)
+- [Complete Example: Authenticated HTTP Service](https://cloud.morph.so/docs/documentation/instances/http-services#complete-example-authenticated
+-http-service)

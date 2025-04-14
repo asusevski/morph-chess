@@ -1,12 +1,16 @@
 [project]
-name = "test"
+name = "morph-chess"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
+    "chess-board>=0.4.1",
     "chess>=1.11.2",
     "huggingface-hub>=0.29.3",
     "morphcloud>=0.1.32",
     "pyproject-toml>=0.1.0",
+    "pyyaml>=6.0.2",
+    "pillow>=11.1.0",
+    "openai>=1.69.0",
 ]

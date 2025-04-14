@@ -1,0 +1,120 @@
+[Skip to main content](https://cloud.morph.so/docs/documentation/instances/pause-resume#__docusaurus_skipToContent_fallback)
+
+On this page
+
+The pause and resume functionality allows you to temporarily suspend an instance while preserving its memory state, and later restart it exactly 
+where it left off. This approach saves on compute costs compared to keeping an instance running while still preserving its state.
+
+## When to Use Pause vs Stop [​](https://cloud.morph.so/docs/documentation/instances/pause-resume\#when-to-use-pause-vs-stop "Direct link to When 
+to Use Pause vs Stop")
+
+- **Pause**: Use when you need to preserve the running state of applications, the memory contents, and all processes. You'll only be charged for 
+storage, not compute resources.
+- **Stop**: Use when you're completely done with the instance and want to release all resources. You'll lose the running state, but you can alway
+s start a new instance from a snapshot.
+
+## Pause an Instance [​](https://cloud.morph.so/docs/documentation/instances/pause-resume\#pause-an-instance "Direct link to Pause an Instance")
+
+Pausing an instance suspends its execution while preserving the memory state. It's effectively the same as if you had snapshotted the instance.
+
+- Python
+- TypeScript
+- CLI
+
+```codeBlockLines_e6Vv
+from morphcloud.api import MorphCloudClient
+
+client = MorphCloudClient()
+
+instance_id = "morphvm_abc123" # Replace with a valid instance ID
+instance = client.instances.get(instance_id=instance_id)
+instance.pause()
+
+print(f"Instance '{instance_id}' paused.")
+
+```
+
+```codeBlockLines_e6Vv
+import { MorphCloudClient } from 'morphcloud';
+
+const client = new MorphCloudClient();
+
+async function pauseInstance() {
+  const instanceId = "morphvm_abc123"; // Replace with a valid instance ID
+  const instance = await client.instances.get({ instanceId: instanceId });
+  await instance.pause();
+
+  console.log(`Instance '${instanceId}' paused.`);
+}
+
+pauseInstance();
+
+```
+
+```codeBlockLines_e6Vv
+# Pause an instance
+morphcloud instance pause morphvm_abc123
+
+```
+
+## Resume an Instance [​](https://cloud.morph.so/docs/documentation/instances/pause-resume\#resume-an-instance "Direct link to Resume an Instance"
+)
+
+Resuming a paused instance restores it to its exact state at the time of pausing, with all processes and memory state intact.
+
+- Python
+- TypeScript
+- CLI
+
+```codeBlockLines_e6Vv
+from morphcloud.api import MorphCloudClient
+
+client = MorphCloudClient()
+
+instance_id = "morphvm_abc123" # Replace with a valid instance ID
+instance = client.instances.get(instance_id=instance_id)
+instance.resume()
+
+print(f"Instance '{instance_id}' resumed.")
+
+```
+
+```codeBlockLines_e6Vv
+import { MorphCloudClient } from 'morphcloud';
+
+const client = new MorphCloudClient();
+
+async function resumeInstance() {
+  const instanceId = "morphvm_abc123"; // Replace with a valid instance ID
+  const instance = await client.instances.get({ instanceId: instanceId });
+  await instance.resume();
+
+  console.log(`Instance '${instanceId}' resumed.`);
+}
+
+resumeInstance();
+
+```
+
+```codeBlockLines_e6Vv
+# Resume a paused instance
+morphcloud instance resume morphvm_abc123
+
+```
+
+## Cost Implications [​](https://cloud.morph.so/docs/documentation/instances/pause-resume\#cost-implications "Direct link to Cost Implications")
+
+When an instance is paused:
+
+- We create a new snapshot and suspend the VM
+- The VM stops consuming MCUs
+- You only get charged for the snapshot taken
+- Running processes/memory state preserved as usual
+
+This makes pausing an economical way to temporarily suspend workloads that you'll need to resume later in the exact same state.
+
+- [When to Use Pause vs Stop](https://cloud.morph.so/docs/documentation/instances/pause-resume#when-to-use-pause-vs-stop)
+- [Pause an Instance](https://cloud.morph.so/docs/documentation/instances/pause-resume#pause-an-instance)
+- [Resume an Instance](https://cloud.morph.so/docs/documentation/instances/pause-resume#resume-an-instance)
+- [Cost Implications](https://cloud.morph.so/docs/documentation/instances/pause-resume#cost-implications)
+
