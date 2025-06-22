@@ -8,7 +8,7 @@ class ChessEngine:
     """
     A chess engine that maintains game state and provides methods for gameplay.
     """
-    def __init__(self, load_path=None, autosave=True, autosave_dir="chess_autosaves", game_id=None):
+    def __init__(self, load_path=None, autosave=True, autosave_dir="chess_autosaves", game_id=None, strategy_name=None):
         """
         Initialize a new chess engine.
         
@@ -17,6 +17,7 @@ class ChessEngine:
             autosave (bool): Whether to automatically save the game after moves
             autosave_dir (str): Directory for autosave files
             game_id (str): Optional custom game ID to use
+            strategy_name (str): Optional name of the agent's strategy
         """
         # Create save directory if it doesn't exist
         self.autosave_dir = autosave_dir
@@ -25,6 +26,7 @@ class ChessEngine:
             
         self.autosave = autosave
         self.move_timestamps = {}
+        self.strategy_name = strategy_name
         
         # Either load a game or start a new one
         if load_path:
@@ -140,6 +142,7 @@ class ChessEngine:
             "fen": self.board.fen(),
             "move_history": [move.uci() for move in self.board.move_stack],
             "move_timestamps": string_move_timestamps,
+            "strategy_name": self.strategy_name,
             "last_updated": datetime.now().isoformat()
         }
         
@@ -185,6 +188,10 @@ class ChessEngine:
         
         # Set game ID
         self.game_id = game_data["game_id"]
+        
+        # Load strategy name if it exists
+        if "strategy_name" in game_data:
+            self.strategy_name = game_data["strategy_name"]
         
         # Extract move timestamps (convert keys back to integers)
         self.move_timestamps = {}

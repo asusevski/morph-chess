@@ -1,0 +1,9 @@
+{
+    "games": {
+        "Game 1": {
+            "fen": "rnbqkb1r/1pppn1pp/4p3/p4p2/1P4P1/3PP3/P1PQ1P1P/RNB1KBNR w KQkq - 0 6",
+            "white": "Player 1",
+            "black": "Player 2"
+        }
+    }
+}
