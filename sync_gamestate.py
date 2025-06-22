@@ -1,59 +1,137 @@
-from logging import exception
 from morphcloud.api import MorphCloudClient
 import argparse
 import time
 import json
 import shutil
+import os
+import logging
+import hashlib
 
+# Configure simple logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    filename='chess_sync.log'
+)
+logger = logging.getLogger('ChessSync')
 
-if __name__=="__main__":
+def sync_game_state(instance_id, game_id, timeout=60, game_timeout=20):
+    """
+    Synchronize chess game state from a MorphCloud instance to local files.
+    Uses hash-based change detection to avoid unnecessary updates.
     
-    # need gameid, instance id, timeout in seconds to keep syncing
-    # optional file param if want to test with file
-    parser = argparse.ArgumentParser(description='Download files from MorphCloud instance')
-    parser.add_argument('-instance_id', type=str, default=None, help='ID of the MorphCloud instance', required=True)
-    parser.add_argument('-game_id', type=str, default=None, help='ID of the game to download', required=False)
-    # parser.add_argument('-file', type=str, default=None, help='File to download (optional). Full path expected.', required=False)
-    parser.add_argument('-timeout', type=int, default=60, help='Timeout in seconds for the download', required=False)
-    args = parser.parse_args()
-
+    Args:
+        instance_id (str): MorphCloud instance ID
+        game_id (str): Game ID to synchronize
+        timeout (int): How long to continue synchronizing in seconds
+        game_timeout (int): How long a game can be missing before considered inactive
+    """
+    # Create necessary directories
+    os.makedirs("tmp", exist_ok=True)
+    os.makedirs("chess_autosaves", exist_ok=True)
+    
+    # Initialize client and connect to instance
     client = MorphCloudClient()
-    instance = client.instances.get(args.instance_id)
-
+    instance = client.instances.get(instance_id)
+    
+    # Track last seen state to avoid redundant updates
+    last_content_hash = None
+    last_activity_time = time.time()
+    consecutive_unchanged = 0
+    max_unchanged = 15  # Stop after 15 unchanged checks
+    
+    def calculate_hash(file_path):
+        """Calculate MD5 hash of file contents"""
+        try:
+            with open(file_path, 'rb') as f:
+                return hashlib.md5(f.read()).hexdigest()
+        except Exception as e:
+            logger.error(f"Error calculating hash: {e}")
+            return None
+    
     with instance.ssh() as ssh:
         sftp = ssh._client.open_sftp()
         try:
-            # while timeout not reached keep syncing
+            # Set up timing
             start_time = time.time()
-            end_time = start_time + args.timeout
-            last_fen = None
-            c = 0
-            while time.time() < end_time and c <= 15:
+            end_time = start_time + timeout
+            
+            temp_file = f"tmp/game_id_{game_id}_tmp.json"
+            target_file = f"chess_autosaves/game_id_{game_id}.json"
+            remote_file = f"app/chess_autosaves/game_id_{game_id}.json"
+            
+            logger.info(f"Starting synchronization for game {game_id}")
+            
+            while time.time() < end_time and consecutive_unchanged <= max_unchanged:
                 try:
-                    # if args.file is not None:
-                    #     sftp.get(args.file, args.file)
-                    #     print(f"Downloading game state for game {args.game_id}...")
-                    # else:
+                    # Download to temp file
+                    sftp.get(remote_file, temp_file)
                     
-                    # save to a temp file
-                    sftp.get(f"app/chess_autosaves/game_id_{args.game_id}.json", f"tmp/game_id_{args.game_id}_tmp.json")
-                    print(f"Downloading game state for game {args.game_id}...")
-                    #TODO: add checking for when the game is over (no new updates or max moves reached)
-                    game_state = json.load(open(f"tmp/game_id_{args.game_id}_tmp.json"))
+                    # Verify if the file is valid JSON and has changed
                     try:
-                        new_fen = game_state["fen"]
-                    except KeyError:
-                        continue
-
-                    if last_fen is None or last_fen != new_fen:
-                        last_fen = new_fen
-                        shutil.move(f"tmp/game_id_{args.game_id}_tmp.json", f"chess_autosaves/game_id_{args.game_id}.json")
-                    else:
-                        c += 1
-                    time.sleep(0.5)
+                        # Check if valid JSON
+                        game_state = json.load(open(temp_file))
+                        
+                        # Get content hash
+                        current_hash = calculate_hash(temp_file)
+                        
+                        # Update last activity time
+                        last_activity_time = time.time()
+                        
+                        # Only update if content has changed
+                        if current_hash != last_content_hash:
+                            logger.info(f"Game state changed for game {game_id}")
+                            last_content_hash = current_hash
+                            consecutive_unchanged = 0
+                            
+                            # Move atomically to avoid partial reads by the monitor
+                            shutil.move(temp_file, target_file)
+                            print(f"Updated game state for game {game_id}")
+                        else:
+                            consecutive_unchanged += 1
+                            
+                    except json.JSONDecodeError:
+                        logger.warning(f"Invalid JSON in downloaded file for game {game_id}")
+                        consecutive_unchanged += 1
+                        
                 except FileNotFoundError:
-                    continue
-
+                    logger.warning(f"Remote file not found for game {game_id}")
+                    
+                    # Check if the game has been missing too long
+                    time_since_activity = time.time() - last_activity_time
+                    if time_since_activity > game_timeout:
+                        logger.info(f"Game {game_id} appears to be inactive (no updates for {time_since_activity:.1f}s)")
+                        break
+                
+                # Wait before next check
+                time.sleep(0.5)
+                
+            logger.info(f"Sync complete for game {game_id}: timeout={time.time() >= end_time}, "
+                       f"unchanged_limit={consecutive_unchanged > max_unchanged}")
+            
+        except Exception as e:
+            logger.error(f"Error during synchronization: {e}")
         finally:
             sftp.close()
 
+
+if __name__ == "__main__":
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(description='Download files from MorphCloud instance')
+    parser.add_argument('-instance_id', type=str, required=True, 
+                        help='ID of the MorphCloud instance')
+    parser.add_argument('-game_id', type=str, required=True, 
+                        help='ID of the game to download')
+    parser.add_argument('-timeout', type=int, default=60, 
+                        help='Timeout in seconds for the download')
+    parser.add_argument('-game_timeout', type=int, default=20,
+                        help='How long a game can be missing before considered inactive')
+    args = parser.parse_args()
+
+    # Run synchronization
+    sync_game_state(
+        args.instance_id, 
+        args.game_id, 
+        timeout=args.timeout,
+        game_timeout=args.game_timeout
+    )
