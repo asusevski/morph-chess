@@ -152,9 +152,9 @@ async def main(*args, **kwargs):
     snapshot, clones = base_instance.branch(count=len(game_ids))
     logger.info(f"Clones created from snapshot {snapshot.id}: {[c.id for c in clones]}")
     # create metadata for tracking/visualization
-    for game_id, clones, strategy in zip(game_ids, clones, strategies):
+    for game_id, clone, strategy in zip(game_ids, clones, strategies):
         metadata = {
-            "instance_id": clones.id,
+            "instance_id": clone.id,
             "game_id": game_id,
             "strategy": strategy
         }
@@ -190,6 +190,7 @@ if __name__ == "__main__":
     else:
         asyncio.run(main())
     # Cleanup
+    #TODO: add status to gamestate json to say game is over, easier to handle visualization
     client = MorphCloudClient()
     if not args.persist_instances:
         client = MorphCloudClient()

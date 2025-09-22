@@ -143,7 +143,7 @@ class ChessBoardMonitor:
         """Create or update a single game display."""
         try:
             # Get game ID from filename
-            game_id = os.path.basename(game_file).replace('.json', '')
+            game_id = os.path.basename(game_file).replace('.json', '').replace('game_id_', '')
             
             # Update last seen time
             self.game_last_seen[game_id] = time.time()
@@ -178,6 +178,16 @@ class ChessBoardMonitor:
             strategy = game_data.get("strategy_name", "Unknown")
             last_updated = game_data.get("last_updated", datetime.now().isoformat())
             move_history = game_data.get("move_history", [])
+
+            # Read instance_id from metadata file
+            metadata_file = f"chess_autosaves/metadata_game_id_{game_id}.json"
+            instance_id = "Unknown"
+            try:
+                with open(metadata_file, 'r') as f:
+                    metadata = json.load(f)
+                    instance_id = metadata.get("instance_id", "Unknown")
+            except (FileNotFoundError, json.JSONDecodeError) as e:
+                instance_id = "Unknown"
             
             # Calculate grid position
             row, col = index // cols, index % cols
@@ -190,7 +200,8 @@ class ChessBoardMonitor:
                     "file": game_file,
                     "strategy": strategy,
                     "last_updated": last_updated,
-                    "move_history": move_history
+                    "move_history": move_history,
+                    "instance_id": instance_id
                 }
                 
                 # Update labels with new info
@@ -222,7 +233,8 @@ class ChessBoardMonitor:
                     "file": game_file,
                     "strategy": strategy,
                     "last_updated": last_updated,
-                    "move_history": move_history
+                    "move_history": move_history,
+                    "instance_id": instance_id
                 }
                 
                 # Create header with game info
@@ -237,7 +249,11 @@ class ChessBoardMonitor:
                 # Strategy info
                 strategy_label = tk.Label(header_frame, text=f"Strategy: {strategy}")
                 strategy_label.pack(side=tk.TOP)
-                
+
+                # Instance ID
+                instance_label = tk.Label(header_frame, text=f"Instance: {instance_id}")
+                instance_label.pack(side=tk.TOP)
+
                 # Move count
                 moves_label = tk.Label(header_frame, text=f"Moves: {len(move_history)}")
                 moves_label.pack(side=tk.TOP)
