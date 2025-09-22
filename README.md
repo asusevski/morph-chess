@@ -19,7 +19,7 @@ uv run orchestrator.py
 
 ### Monitor games locally (run separately):
 ```bash
-uv run orchestrator.py
+uv run chess_monitor.py
 ```
 
 ### Play interactively:
