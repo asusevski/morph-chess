@@ -13,16 +13,15 @@ import argparse
 from schemas import ChessMoveResponse
 from openai import OpenAI
 
-
 class ChessLLMAgent:
-    def __init__(self, chess_script_path: str, llm_client=None, config=None):
+    def __init__(self, chess_script_path: str, config: Dict[str, Any] = None, strategy_name: str = "balanced"):
         """
         Initialize the LLM chess agent.
         
         Args:
             chess_script_path: Path to the chess game Python script
-            llm_client: LLM client instance (optional)
             config: Configuration dictionary (optional)
+            strategy_name: Name of the strategy to use (default: "balanced")
         """
         self.chess_script_path = chess_script_path
         self.game_id = None
@@ -33,9 +32,57 @@ class ChessLLMAgent:
         self.in_check = False
         self.game_over = False
         self.valid_moves = []
-        self.llm_client = llm_client
         self.config = config or {}
         self.chess_board = None  # Chess board object for easier move generation and FEN access
+        
+        # Set the strategy name and prompt
+        self.strategy_name = strategy_name
+        self.strategy_prompt = self._get_strategy_prompt()
+        
+        # Initialize LLM client during agent creation
+        self.llm_client = self._init_llm_client()
+    
+    def _init_llm_client(self):
+        """Initialize the LLM client based on configuration."""
+        if not self.config or 'llm' not in self.config:
+            print("Warning: LLM configuration not found. Using defaults.")
+            provider = "openai"
+            api_key_env = "OPENAI_API_KEY"
+        else:
+            provider = self.config['llm'].get('provider', 'openai')
+            api_key_env = self.config['llm'].get('api_key_env', 'OPENAI_API_KEY')
+            
+        # Get API key from environment
+        api_key = os.environ.get(api_key_env)
+        if not api_key:
+            raise ValueError(f"API key environment variable '{api_key_env}' not set")
+            
+        # Initialize the appropriate client based on provider
+        if provider == "openai":
+            return OpenAI(api_key=api_key)
+        elif provider == "anthropic":
+            return Anthropic(api_key=api_key)
+        else:  # Default to HuggingFace
+            return InferenceClient(
+                provider=provider,
+                api_key=api_key,
+            )
+    
+    def _get_strategy_prompt(self) -> str:
+        """Get the strategy prompt template based on strategy name."""
+        # Default strategy prompts in case they're not in config
+        default_prompts = {
+            "aggressive": "You are playing as White with an aggressive strategy. Focus on controlling the center, developing pieces quickly, and looking for attacking opportunities. Prioritize moves that threaten opponent pieces or create tactical possibilities.",
+            "defensive": "You are playing as White with a defensive strategy. Focus on protecting your pieces, creating a solid pawn structure, and avoiding weaknesses. Look for moves that improve your position's safety before considering attacks.",
+            "balanced": "You are playing as White with a balanced strategy. Weigh both offensive and defensive considerations equally. Develop pieces harmoniously, maintain pawn structure, and look for opportunities that don't create significant weaknesses."
+        }
+        
+        # If strategy name is not in default prompts, fall back to balanced
+        if self.strategy_name not in default_prompts:
+            print(f"Warning: Unknown strategy '{self.strategy_name}'. Using balanced strategy.")
+            return default_prompts["balanced"]
+            
+        return default_prompts[self.strategy_name]
     
     def start_new_game(self, autosave: bool = True) -> None:
         """Start a new chess game process with optional autosave."""
@@ -46,6 +93,10 @@ class ChessLLMAgent:
         # Add game ID if specified
         if self.game_id:
             cmd.extend(["--game-id", self.game_id])
+            
+        # Add strategy name
+        if self.strategy_name:
+            cmd.extend(["--strategy", self.strategy_name])
         
         print(f"Starting chess process with command: {' '.join(cmd)}")
         
@@ -136,6 +187,10 @@ class ChessLLMAgent:
         # Add game ID if specified (though it will be loaded from save file)
         if self.game_id:
             cmd.extend(["--game-id", self.game_id])
+            
+        # Add strategy name
+        if self.strategy_name:
+            cmd.extend(["--strategy", self.strategy_name])
         
         print(f"Loading chess game with command: {' '.join(cmd)}")
             
@@ -457,17 +512,37 @@ class ChessLLMAgent:
         # Try to get a valid response with retries
         for attempt in range(max_retries):
             try:
-                completion = self.llm_client.chat.completions.create(
-                    model=self.config.get('llm', {}).get('model_id', "deepseek-ai/DeepSeek-R1-Distill-Llama-8B"),
-                    messages=[
-                        {
-                            "role": "user",
-                            "content": prompt
-                        }
-                    ],
-                    max_tokens=self.config.get('llm', {}).get('max_tokens', 500),
-                )
-                return completion.choices[0].message.content
+                if isinstance(self.llm_client, OpenAI):
+                    completion = self.llm_client.chat.completions.create(
+                        model=self.config.get('llm', {}).get('model_id', "gpt-4o"),
+                        messages=[
+                            {
+                                "role": "user",
+                                "content": prompt
+                            }
+                        ],
+                        max_tokens=self.config.get('llm', {}).get('max_tokens', 500),
+                    )
+                    return completion.choices[0].message.content
+                
+                elif isinstance(self.llm_client, Anthropic):
+                    message = self.llm_client.messages.create(
+                        model=self.config.get('llm', {}).get('model_id', "claude-3-sonnet-20240229"),
+                        max_tokens=self.config.get('llm', {}).get('max_tokens', 500),
+                        messages=[
+                            {
+                                "role": "user",
+                                "content": prompt
+                            }
+                        ]
+                    )
+                    return message.content[0].text
+                
+                else:  # HuggingFace or other clients
+                    return self.llm_client.text_generation(
+                        prompt,
+                        max_new_tokens=self.config.get('llm', {}).get('max_tokens', 500),
+                    )
             except Exception as e:
                 print(f"Error querying LLM (attempt {attempt+1}/{max_retries}): {str(e)}")
                 if attempt == max_retries - 1:
@@ -511,20 +586,16 @@ class ChessLLMAgent:
                     # Try to parse as JSON
                     move_data = json.loads(match)
                     
-                    # Validate the structure using our Pydantic model
-                    from pydantic import ValidationError
-                    try:
-                        # Import locally to avoid circular imports
-                        move_response = ChessMoveResponse(**move_data)
+                    # Check if it has the expected structure
+                    if "selected_move" in move_data:
+                        selected_move = move_data["selected_move"]
                         
                         # Verify the selected move is in valid moves
-                        if move_response.selected_move in valid_moves:
-                            print(f"Successfully parsed structured move: {move_response.selected_move}")
-                            return move_response.selected_move
+                        if selected_move in valid_moves:
+                            print(f"Successfully parsed structured move: {selected_move}")
+                            return selected_move
                         else:
-                            print(f"Warning: Selected move {move_response.selected_move} is not valid")
-                    except ValidationError as e:
-                        print(f"Validation error in move data: {e}")
+                            print(f"Warning: Selected move {selected_move} is not valid")
                 except json.JSONDecodeError:
                     print(f"Failed to parse JSON: {match}")
         
@@ -585,84 +656,63 @@ class ChessLLMAgent:
     
         # Instructions for structured response format
         structured_output_instructions = """
-    You must respond with a structured JSON object containing your selected move and alternatives.
-    The JSON object should have the following format:
-    {
-      "selected_move": "e2e4",  // Your primary chosen move in UCI format
-      "alternative_moves": ["d2d4", "g1f3"],  // At least one alternative move
-    }
-    
-    Only select moves from the provided valid moves list. Your selection must be a valid UCI format move.
-    Place the JSON output at the end of your response, enclosed in ```json and ``` tags.
-    """
+You must respond with a structured JSON object containing your selected move and alternatives.
+The JSON object should have the following format:
+{
+  "selected_move": "e2e4",  // Your primary chosen move in UCI format
+  "alternative_moves": ["d2d4", "g1f3"],  // At least one alternative move
+}
+
+Only select moves from the provided valid moves list. Your selection must be a valid UCI format move.
+Place the JSON output at the end of your response, enclosed in ```json and ``` tags.
+"""
     
         prompt = f"""
-    You are playing chess as White. Your goal is to choose the best move.
-    
-    Current board state:
-    {self.board_state}
-    
-    Move history:
-    {', '.join(move_history) if move_history else "No previous moves."}
-    
-    FEN notation:
-    {fen_representation}
-    
-    Current evaluation: {self.evaluation}
-    {"You are in CHECK!" if self.in_check else ""}
-    
-    Valid moves (in UCI format):
-    {', '.join(valid_moves)}
-    
-    {structured_output_instructions}
+{self.strategy_prompt}
 
-    Return nothing but the json output. No yapping.
+Current board state:
+{self.board_state}
 
-    Your move:
-    """
-        # Keep track of attempts to get a structured response
-        max_attempts = 1
-        for attempt in range(max_attempts):
-            # Query the LLM
-            response = self.query_llm(prompt)
-            print(response)
-            
-            # Try to parse the move from structured output
-            move = self._parse_llm_chess_move(response)
-            
-            # If we got a valid move, return it
-            if move and move in valid_moves:
-                return move
-                
-            # If we didn't get a valid move, add more explicit instructions
-            if attempt < max_attempts - 1:
-                print(f"Attempt {attempt+1} failed to get a valid structured response. Trying again with more guidance.")
-                # Add more explicit instructions for the retry
-                prompt += f"""
-    
-    IMPORTANT: Your previous response could not be correctly parsed. 
-    Please ensure your response ends with a properly formatted JSON object like this:
-    
-    ```json
-    {{
-      "selected_move": "One of these valid moves: {', '.join(valid_moves[:5])}...",
-      "alternative_moves": ["Another valid move", "A third valid move"],
-      "reasoning": "Brief explanation of your choice"
-    }}
-    ```
-    
-    Choose your move from these valid options: {', '.join(valid_moves)}
-    """
+Move history:
+{', '.join(move_history) if move_history else "No previous moves."}
+
+FEN notation:
+{fen_representation}
+
+Current evaluation: {self.evaluation}
+{"You are in CHECK!" if self.in_check else ""}
+
+Valid moves (in UCI format):
+{', '.join(valid_moves)}
+
+{structured_output_instructions}
+
+Return nothing but the json output. No yapping.
+
+Your move:
+"""
+        # Query the LLM
+        response = self.query_llm(prompt)
+        print(response)
         
-        # If all attempts failed, fall back to a random valid move
-        if valid_moves:
-            selected_move = random.choice(valid_moves)
-            print(f"Failed to get structured response after {max_attempts} attempts. Using random move: {selected_move}")
-            return selected_move
+        # Try to parse the move from structured output
+        move = self._parse_llm_chess_move(response)
+        
+        # If we got a valid move, return it
+        if move and move in valid_moves:
+            return move
+                
+        # If we didn't get a valid move, add more explicit instructions
+        if not move or move not in valid_moves:
+            print(f"Failed to get a valid move from LLM response. Using random move.")
+            # If we have valid moves, choose a random one
+            if valid_moves:
+                selected_move = random.choice(valid_moves)
+                return selected_move
             
         return ""
-    
-    def play_game(self, moves_limit: int = 50) -> None:
+
+    def play_game(self, moves_limit: int = 2) -> None:
         """
         Play a chess game with the LLM making moves as White.
         
@@ -672,8 +722,8 @@ class ChessLLMAgent:
         move_count = 0
         
         # Use the moves_limit from config if available
-        if self.config and 'chess' in self.config and 'max_moves' in self.config['chess']:
-            moves_limit = self.config['chess']['max_moves']
+        # if self.config and 'chess' in self.config and 'max_moves' in self.config['chess']:
+        #     moves_limit = self.config['chess']['max_moves']
         
         # First parse the output to get the current state
         # Important: We need to know whose turn it is (White or Black)
@@ -693,7 +743,7 @@ class ChessLLMAgent:
                 
             # Generate and make a move as White
             move = self.generate_chess_move()
-            print(f"LLM's move: {move}")
+            print(f"LLM's move ({self.strategy_name} strategy): {move}")
             success, output = self.make_move(move)
             
             if not success:
@@ -719,6 +769,7 @@ class ChessLLMAgent:
         if self.process and self.process.poll() is None:
             self._send_command("quit")
             self.process.wait(timeout=5)
+
 
 
 def load_config(config_path='config.yaml'):
@@ -793,6 +844,7 @@ if __name__ == "__main__":
     arg_parser.add_argument("--debug", action="store_true", help="Enable debug output")
     arg_parser.add_argument("--config", default="config.yaml", help="Path to configuration file")
     arg_parser.add_argument("--game-id", help="Specify a custom game ID")
+    arg_parser.add_argument("--strategy", default="balanced", help="Strategy name (aggressive, defensive, balanced)")
     
     args = arg_parser.parse_args()
     
@@ -800,11 +852,8 @@ if __name__ == "__main__":
         # Load configuration
         config = load_config(args.config)
         
-        # Initialize LLM client
-        llm_client = init_llm_client(config)
-        
         # Create the agent
-        agent = ChessLLMAgent(args.chess, llm_client=llm_client, config=config)
+        agent = ChessLLMAgent(args.chess, config=config, strategy_name=args.strategy)
         
         # Set custom game ID if provided
         if args.game_id:
@@ -825,6 +874,7 @@ if __name__ == "__main__":
         
         # Determine moves limit (command-line overrides config)
         moves_limit = args.moves or (config.get('chess', {}).get('max_moves', 50) if config else 50)
+        print(moves_limit)
         
         # Play the game
         agent.play_game(moves_limit=moves_limit)

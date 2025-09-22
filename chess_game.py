@@ -56,6 +56,7 @@ def game_loop():
     parser.add_argument("--load", help="Load a saved game file")
     parser.add_argument("--autosave", action="store_true", help="Automatically save the game after every move")
     parser.add_argument("--game-id", help="Specify a custom game ID")
+    parser.add_argument("--strategy", help="Name of the agent's strategy")
     args = parser.parse_args()
     
     # Create save directory
@@ -64,13 +65,13 @@ def game_loop():
     # Initialize the chess engine
     if args.load:
         try:
-            engine = ChessEngine(load_path=args.load, autosave=args.autosave, autosave_dir=autosave_dir)
+            engine = ChessEngine(load_path=args.load, autosave=args.autosave, autosave_dir=autosave_dir, strategy_name=args.strategy)
             print(f"Loaded game with ID: {engine.game_id}")
         except (FileNotFoundError, ValueError) as e:
             print(f"Error loading game: {e}")
             return
     else:
-        engine = ChessEngine(autosave=args.autosave, autosave_dir=autosave_dir, game_id=args.game_id)
+        engine = ChessEngine(autosave=args.autosave, autosave_dir=autosave_dir, game_id=args.game_id, strategy_name=args.strategy)
         print(f"New game started with ID: {engine.game_id}")
     
     # Define the autosave file path
@@ -78,6 +79,11 @@ def game_loop():
         
     print("\nWelcome to Chess!")
     print("You play as White, computer plays as Black")
+    
+    # Display strategy if specified
+    if engine.strategy_name:
+        print(f"Agent is using the '{engine.strategy_name}' strategy")
+        
     display_help()
     
     if args.autosave:
