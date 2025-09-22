@@ -1,9 +1,0 @@
-{
-    "games": {
-        "Game 1": {
-            "fen": "r1b1k1nr/pppp1ppp/2n1p3/b5q1/4P3/1PPP1N2/P3KPPP/RNBQ1B1R b kq - 2 6",
-            "white": "Player 5",
-            "black": "Player 6"
-        }
-    }
-}

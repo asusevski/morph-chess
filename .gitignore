@@ -178,3 +178,5 @@ uv.lock
 chess_autosaves/
 tmp/
 chess_monitor.log
+chess_orchestrator.log
+integrated_chess.log
