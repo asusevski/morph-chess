@@ -1,3 +1,4 @@
+import argparse
 import chess
 import chess.svg
 import time
@@ -13,6 +14,7 @@ import glob
 import hashlib
 import logging
 
+
 # Set up logging
 logging.basicConfig(
     level=logging.INFO,
@@ -20,6 +22,7 @@ logging.basicConfig(
     filename='chess_monitor.log'
 )
 logger = logging.getLogger('ChessMonitor')
+
 
 class ChessBoardMonitor:
     def __init__(self, games_pattern="chess_autosaves/game_id_*.json", refresh_rate=1.0, game_timeout=20.0):
@@ -414,7 +417,6 @@ class ChessBoardMonitor:
 
 
 def main():
-    import argparse
     
     parser = argparse.ArgumentParser(description='Chess Games Monitor')
     parser.add_argument('--games', type=str, default='chess_autosaves/game_id_*.json',
