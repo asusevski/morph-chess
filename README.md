@@ -2,6 +2,8 @@
 
 A distributed chess system that runs multiple chess agents on cloud instances with real-time visualization.
 
+https://github.com/user-attachments/assets/fc3dbecc-a321-4755-966c-9f439b6a59be
+
 ## Components
 
 - **`orchestrator.py`** - Main orchestrator that manages cloud instances, deploys chess agents, and synchronizes game states
